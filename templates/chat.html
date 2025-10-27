@@ -1,0 +1,119 @@
+{% extends "layout.html" %}
+
+{% block title %}Chat de Negociação{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    
+    <div class="chat-header" id="chat-header" {% if not chat_id %}class="hidden"{% endif %}>
+        <div class="chat-header-info">
+            <h3>Negociação #<span id="chat-header-id">{{ chat_id | default('Nova', true) }}</span></h3>
+            <span class="chat-status" id="chat-status">
+                {% if chat_data and chat_data.status == 'completed' %}
+                    Negociação Encerrada
+                {% elif chat_data and chat_data.status == 'pending_review' %}
+                    Aguardando revisão
+                {% elif chat_data and chat_data.status == 'assumed' %}
+                    Em atendimento
+                {% elif chat_data and chat_data.status == 'manual_override' %}
+                    IA Desativada - Atendimento Manual
+                {% else %}
+                    Negociação em andamento
+                {% endif %}
+            </span>
+        </div>
+        <div class="chat-actions">
+            {% if current_user.role >= 1 %}
+                <button class="btn btn-sm btn-warning hidden" id="disable-ia-button">
+                    Desativar IA
+                </button>
+                <button class="btn btn-sm btn-danger hidden" id="close-chat-button">
+                    Encerrar Negociação
+                </button>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="chat-window" id="chat-window">
+        
+        {% if not chat_history %}
+            <div class="message-container bot">
+                <div class="profile-pic">
+                    <img src="/static/img/logo.png" alt="bot" style="width: 100%; height: 100%; border-radius: 50%;">
+                </div>
+                <div class="message-content">
+                    <div class="message-bubble">
+                        Olá {{ current_user.name }}, Qual produto você deseja verificar negociação?
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            {% for msg in chat_history %}
+                {% if msg.sender_type == 'system' %}
+                    <div class="message-container system">
+                        <div class="message-bubble">{{ msg.text }}</div>
+                    </div>
+                {% else %}
+                    <div class="message-container {{ msg.sender_type }}">
+                        {% if msg.sender_type == 'user' %}
+                            <div class="profile-pic">👤</div>
+                        {% else %}
+                            <div class="profile-pic">
+                                <img src="/static/img/logo.png" alt="bot" style="width: 100%; height: 100%; border-radius: 50%;">
+                            </div>
+                        {% endif %}
+                        
+                        <div class="message-content">
+                            {% if msg.sender_type == 'admin' %}
+                                <div class="message-sender-name">{{ msg.sender_name | default('Vendedor', true) }}</div>
+                            {% elif msg.sender_type == 'user' %}
+                                <div class="message-sender-name">{{ chat_data.user_name }}</div>
+                            {% endif %}
+                            
+                            <div class="message-bubble">
+                                {{ msg.text | replace('\n', '<br>') | safe }}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </div>
+    
+    <div class="chat-input-area" id="input-area">
+        
+        <div class="hidden" id="review-button-container">
+            <button id="review-button" class="btn btn-warning">
+                Solicitar Revisão da Proposta
+            </button>
+        </div>
+        
+        <div class="chat-input-row" id="chat-input-row">
+            <textarea id="chat-input" placeholder="Digite sua mensagem..." rows="1"></textarea>
+            <button id="send-button" class="btn btn-primary">Enviar</button>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+    <script>
+        // Passa os dados do Python para o JavaScript
+        ChatModule.init({
+            chatId: {{ chat_id | tojson }},
+            status: "{{ chat_data.status | default('active', true) }}",
+            userName: "{{ current_user.name }}"
+        });
+
+        // Auto-resize do textarea
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            chatInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+        }
+    </script>
+{% endblock %}

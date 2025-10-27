@@ -1,0 +1,13 @@
+# Framework web
+Flask==2.3.3
+python-dotenv==1.0.0
+
+# Conexão com Neon DB (PostgreSQL)
+psycopg2-binary==2.9.7
+
+# API do Gemini
+google-generativeai==0.3.2
+
+# Para gerenciar login e sessões
+Flask-Login==0.6.3
+Flask-Bcrypt==1.0.1

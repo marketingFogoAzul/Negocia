@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+{% block title %}Logs de Auditoria{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>Logs de Auditoria do Sistema</h1>
+    <p>Registro de todas as ações importantes. (Sem opção de apagar)</p>
+</div>
+
+<div class="admin-content">
+    <div class="admin-section">
+        {% if logs is not none and logs %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Data/Hora</th>
+                        <th>Usuário (Email)</th>
+                        <th>Ação</th>
+                        <th>Detalhes</th>
+                        <th>Usuário Alvo (ID)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ log.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+                        <td>{{ log.user_email }}</td>
+                        <td style="font-weight: 600;">{{ log.action }}</td>
+                        <td style="max-width: 300px; word-break: break-all;">{{ log.details | default('N/A', true) }}</td>
+                        <td>{{ log.target_user_id | default('N/A', true) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="pagination">
+                {% if current_page > 1 %}
+                    <a href="{{ url_for('admin_logs', page=current_page-1) }}" class="btn btn-sm btn-gray">&laquo; Anterior</a>
+                {% else %}
+                    <span class="btn btn-sm btn-gray" style="opacity: 0.5; cursor: not-allowed;">&laquo; Anterior</span>
+                {% endif %}
+                
+                <span>Página {{ current_page }} de {{ total_pages }}</span>
+                
+                {% if current_page < total_pages %}
+                    <a href="{{ url_for('admin_logs', page=current_page+1) }}" class="btn btn-sm btn-gray">Próxima &raquo;</a>
+                {% else %}
+                    <span class="btn btn-sm btn-gray" style="opacity: 0.5; cursor: not-allowed;">Próxima &raquo;</span>
+                {% endif %}
+            </div>
+
+        {% else %}
+            <p>Nenhum registro de auditoria encontrado.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

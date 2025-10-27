@@ -1,0 +1,149 @@
+{% extends "layout.html" %}
+{% block title %}
+    {% if current_user.role == 0 %}
+        Minhas Negociações
+    {% else %}
+        Gerenciar Negociações
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>
+        {% if current_user.role == 0 %}
+            Minhas Negociações
+        {% elif current_user.role == 1 %}
+            Negociações Atribuídas
+        {% else %}
+            Todas as Negociações
+        {% endif %}
+    </h1>
+    <p>
+        {% if current_user.role == 0 %}
+            Seu histórico de negociações.
+        {% elif current_user.role == 1 %}
+            Chats de negociação atribuídos a você.
+        {% else %}
+            Visualize e gerencie todas as negociações do sistema.
+        {% endif %}
+    </p>
+</div>
+
+<div class="admin-content">
+    {% if current_user.role >= 1 %}
+    <div class="admin-section">
+        <form method="GET" action="{{ url_for('admin_negotiations') }}" class="search-form">
+            <div class="form-group">
+                <label for="q">Buscar por Nome, Email ou ID</label>
+                <input type="search" name="q" id="q" value="{{ search_query | default('', true) }}" 
+                       placeholder="Ex: joao@silva.com ou 105">
+            </div>
+            
+            {% if current_user.role >= 2 %}
+            <div class="form-group">
+                <label for="vendedor">Filtrar por Vendedor</label>
+                <select name="vendedor" id="vendedor">
+                    <option value="">Todos os Vendedores</option>
+                    {% for v in vendedores %}
+                        <option value="{{ v.id }}" {{ 'selected' if v.id == filter_vendedor_id else '' }}>
+                            {{ v.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <div class="admin-section">
+        <h2>Resultados</h2>
+        {% if negotiations is not none and negotiations %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ID Chat</th>
+                        <th>Usuário</th>
+                        <th>Produto</th>
+                        <th>Status</th>
+                        <th>Data</th>
+                        <th>Vendedor</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for neg in negotiations %}
+                    <tr>
+                        <td>#{{ neg.id }}</td>
+                        <td>
+                            <div>{{ neg.user_name }}</div>
+                            <div style="font-size: 0.8rem; color: var(--color-text-muted);">{{ neg.user_email }}</div>
+                        </td>
+                        <td>{{ neg.product_name | default('N/A', true) }}</td>
+                        <td class="status-cell">
+                            <span class="status-bar status-bar-{{ neg.status | lower }}"></span>
+                            <span class="status-{{ neg.status | lower }}">
+                                {{ neg.status.replace('_', ' ') }}
+                            </span>
+                        </td>
+                        <td>{{ neg.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>{{ neg.assigned_admin | default('N/A', true) }}</td>
+                        <td class="actions">
+                            <a href="{{ url_for('existing_chat_page', chat_id=neg.id) }}" 
+                               class="btn btn-sm btn-primary">Ver Chat</a>
+                            {% if current_user.role >= 2 and neg.status == 'pending_review' %}
+                            <form action="{{ url_for('api_assume_negotiation', chat_id=neg.id) }}" method="POST" 
+                                  style="display: inline;" onsubmit="return handleAssume(event, {{ neg.id }})">
+                                <button type="submit" class="btn btn-sm btn-warning">Assumir</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>Nenhuma negociação encontrada.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function handleAssume(event, chatId) {
+        event.preventDefault();
+        const form = event.target;
+        const button = form.querySelector('button');
+        button.disabled = true;
+        button.textContent = '...';
+
+        try {
+            const response = await fetch(form.action, { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(result.message);
+                // Atualiza a linha da tabela
+                const row = form.closest('tr');
+                row.querySelector('.status-cell').innerHTML = `
+                    <span class="status-bar status-bar-assumed"></span>
+                    <span class="status-assumed">assumed</span>
+                `;
+                form.remove();
+            } else {
+                alert('Erro: ' + result.message);
+                button.disabled = false;
+                button.textContent = 'Assumir';
+            }
+        } catch (err) {
+            alert('Erro de conexão.');
+            button.disabled = false;
+            button.textContent = 'Assumir';
+        }
+        return false;
+    }
+</script>
+{% endblock %}

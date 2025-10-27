@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro - ZIPBUM Negocia</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .register-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            width: 100%;
+            max-width: 450px;
+        }
+        
+        .register-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .register-header h2 {
+            margin: 0;
+            font-weight: 600;
+        }
+        
+        .register-header p {
+            margin: 0.5rem 0 0 0;
+            opacity: 0.9;
+        }
+        
+        .register-body {
+            padding: 2rem;
+        }
+        
+        .form-control {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .btn-register {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem;
+            font-weight: 600;
+            color: white;
+            transition: all 0.3s;
+        }
+        
+        .btn-register:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .register-footer {
+            text-align: center;
+            padding: 1rem 2rem 2rem;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+        
+        .password-requirements {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="register-header">
+            <h2><i class="fas fa-user-plus me-2"></i>Criar Conta</h2>
+            <p>Junte-se ao ZIPBUM Negocia</p>
+        </div>
+        
+        <div class="register-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <form method="POST" action="{{ url_for('register') }}">
+                <div class="mb-3">
+                    <label for="name" class="form-label">Nome Completo</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0">
+                            <i class="fas fa-user text-muted"></i>
+                        </span>
+                        <input type="text" class="form-control border-start-0" id="name" name="name" 
+                               placeholder="Seu nome completo" required>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="email" class="form-label">E-mail</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0">
+                            <i class="fas fa-envelope text-muted"></i>
+                        </span>
+                        <input type="email" class="form-control border-start-0" id="email" name="email" 
+                               placeholder="seu@email.com" required>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="password" class="form-label">Senha</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0">
+                            <i class="fas fa-lock text-muted"></i>
+                        </span>
+                        <input type="password" class="form-control border-start-0" id="password" name="password" 
+                               placeholder="Mínimo 6 caracteres" required minlength="6">
+                    </div>
+                    <div class="password-requirements mt-1">
+                        <small>A senha deve ter pelo menos 6 caracteres</small>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="confirm_password" class="form-label">Confirmar Senha</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0">
+                            <i class="fas fa-lock text-muted"></i>
+                        </span>
+                        <input type="password" class="form-control border-start-0" id="confirm_password" name="confirm_password" 
+                               placeholder="Digite a senha novamente" required minlength="6">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-register w-100 mb-3">
+                    <i class="fas fa-user-plus me-2"></i>Criar Conta
+                </button>
+            </form>
+        </div>
+        
+        <div class="register-footer">
+            <p class="mb-0">Já tem uma conta? 
+                <a href="{{ url_for('login') }}" class="text-decoration-none fw-bold">
+                    Faça login aqui
+                </a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Validação de senha em tempo real
+        document.getElementById('password').addEventListener('input', function() {
+            const password = this.value;
+            const requirements = document.querySelector('.password-requirements small');
+            
+            if (password.length < 6) {
+                requirements.innerHTML = '❌ A senha deve ter pelo menos 6 caracteres';
+                requirements.style.color = '#dc3545';
+            } else {
+                requirements.innerHTML = '✅ Senha válida';
+                requirements.style.color = '#198754';
+            }
+        });
+        
+        // Validação de confirmação de senha
+        document.getElementById('confirm_password').addEventListener('input', function() {
+            const password = document.getElementById('password').value;
+            const confirmPassword = this.value;
+            
+            if (confirmPassword && password !== confirmPassword) {
+                this.style.borderColor = '#dc3545';
+            } else {
+                this.style.borderColor = '#198754';
+            }
+        });
+    </script>
+</body>
+</html>

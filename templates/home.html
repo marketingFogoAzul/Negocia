@@ -1,0 +1,119 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="chat-container">
+    <!-- Header -->
+    <div class="main-header text-center">
+        <h3 class="mb-1">ZIPBUM Negocia</h3>
+        <p class="text-muted mb-0">Sistema inteligente de negociações</p>
+    </div>
+
+    <!-- Welcome Message -->
+    <div class="messages-container">
+        <div class="message bot">
+            <div class="message-avatar">Z</div>
+            <div class="message-content">
+                <h5 class="mb-2">👋 Olá, {{ current_user.name }}!</h5>
+                <p class="mb-3">Bem-vindo ao ZIPBUM Negocia. Como posso ajudá-lo hoje?</p>
+                
+                <div class="row g-3 mt-4">
+                    <div class="col-md-6">
+                        <div class="card bg-dark border-secondary h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-comment-dots fa-2x text-primary mb-3"></i>
+                                <h6>Iniciar Nova Negociação</h6>
+                                <p class="small text-muted">Comece uma nova conversa com um cliente</p>
+                                <a href="{{ url_for('new_chat_page') }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-plus me-1"></i>Novo Chat
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card bg-dark border-secondary h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-users fa-2x text-success mb-3"></i>
+                                <h6>Gerenciar Contatos</h6>
+                                <p class="small text-muted">Veja e organize seus contatos</p>
+                                <a href="{{ url_for('contacts') }}" class="btn btn-success btn-sm">
+                                    <i class="fas fa-list me-1"></i>Ver Contatos
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card bg-dark border-secondary h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-chart-bar fa-2x text-info mb-3"></i>
+                                <h6>Relatórios</h6>
+                                <p class="small text-muted">Acompanhe suas métricas</p>
+                                <a href="{{ url_for('reports') }}" class="btn btn-info btn-sm">
+                                    <i class="fas fa-chart-line me-1"></i>Ver Relatórios
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if current_user.role >= 2 %}
+                    <div class="col-md-6">
+                        <div class="card bg-dark border-warning h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-cog fa-2x text-warning mb-3"></i>
+                                <h6>Painel Administrativo</h6>
+                                <p class="small text-muted">Gerencie usuários e produtos</p>
+                                <a href="{{ url_for('admin_panel') }}" class="btn btn-warning btn-sm">
+                                    <i class="fas fa-tools me-1"></i>Acessar Painel
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Quick Stats -->
+                <div class="mt-5 pt-4 border-top border-secondary">
+                    <h6 class="mb-3">📊 Resumo Rápido</h6>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="text-primary">
+                                <div class="h5 mb-1">{{ recent_chats|length }}</div>
+                                <div class="small text-muted">Chats Recentes</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-success">
+                                <div class="h5 mb-1">{{ active_chats if active_chats is defined else 0 }}</div>
+                                <div class="small text-muted">Ativos</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-info">
+                                <div class="h5 mb-1">{{ total_chats if total_chats is defined else 0 }}</div>
+                                <div class="small text-muted">Total</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-container">
+        <div class="input-box">
+            <textarea class="chat-input" placeholder="Digite sua mensagem..." rows="1" 
+                      oninput="autoResize(this)" disabled></textarea>
+            <button class="send-btn" disabled>
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+        <div class="text-center mt-2">
+            <small class="text-muted">
+                Selecione um chat existente ou inicie uma nova conversa
+            </small>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ZIPBUM Negocia{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --sidebar-bg: #202123;
+            --main-bg: #343541;
+            --chat-user-bg: #343541;
+            --chat-bot-bg: #444654;
+            --text-primary: #ffffff;
+            --text-secondary: #d1d5db;
+        }
+        
+        body {
+            background-color: var(--main-bg);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        /* Sidebar estilo ChatGPT */
+        .sidebar {
+            background-color: var(--sidebar-bg);
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 260px;
+            padding: 0.5rem;
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid #4a4a4a;
+        }
+        
+        .new-chat-btn {
+            background-color: transparent;
+            border: 1px solid #565869;
+            color: var(--text-primary);
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            margin: 0.5rem 0;
+            transition: all 0.2s;
+        }
+        
+        .new-chat-btn:hover {
+            background-color: #2b2c2f;
+        }
+        
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem 0;
+        }
+        
+        .chat-item {
+            padding: 0.75rem;
+            margin: 0.25rem 0;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .chat-item:hover {
+            background-color: #2b2c2f;
+            color: var(--text-primary);
+        }
+        
+        .chat-item.active {
+            background-color: #343541;
+        }
+        
+        .user-section {
+            padding: 1rem;
+            border-top: 1px solid #4a4a4a;
+            margin-top: auto;
+        }
+        
+        .user-menu {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            width: 100%;
+            text-align: left;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+        }
+        
+        .user-menu:hover {
+            background-color: #2b2c2f;
+        }
+        
+        /* Main content */
+        .main-content {
+            margin-left: 260px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .main-header {
+            background-color: var(--main-bg);
+            border-bottom: 1px solid #4a4a4a;
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        /* Chat container */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 100%;
+        }
+        
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .message {
+            padding: 1.5rem;
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .message.user {
+            background-color: var(--chat-user-bg);
+        }
+        
+        .message.bot {
+            background-color: var(--chat-bot-bg);
+        }
+        
+        .message-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 0.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        
+        .user .message-avatar {
+            background-color: #19c37d;
+        }
+        
+        .bot .message-avatar {
+            background-color: #715fde;
+        }
+        
+        .message-content {
+            flex: 1;
+            line-height: 1.5;
+        }
+        
+        /* Input area */
+        .input-container {
+            padding: 1rem;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .input-box {
+            position: relative;
+            background-color: #40414f;
+            border-radius: 0.75rem;
+            border: 1px solid #565869;
+        }
+        
+        .chat-input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            width: 100%;
+            padding: 1rem 3rem 1rem 1rem;
+            resize: none;
+            max-height: 200px;
+            outline: none;
+        }
+        
+        .send-btn {
+            position: absolute;
+            right: 0.75rem;
+            bottom: 0.75rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        
+        .send-btn:hover {
+            color: var(--text-primary);
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .menu-toggle {
+                display: block;
+            }
+        }
+        
+        .menu-toggle {
+            display: none;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 1.25rem;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+        }
+        
+        /* Admin panel link */
+        .admin-panel-link {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            text-decoration: none;
+            display: block;
+            margin: 0.5rem 0;
+            text-align: center;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        
+        .admin-panel-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Mobile Menu Toggle -->
+    <button class="menu-toggle" id="menuToggle">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <a href="{{ url_for('home') }}" class="text-decoration-none">
+                <h5 class="text-white mb-0">
+                    <i class="fas fa-comments me-2"></i>ZIPBUM Negocia
+                </h5>
+            </a>
+        </div>
+        
+        <button class="new-chat-btn" onclick="location.href='{{ url_for('new_chat_page') }}'">
+            <i class="fas fa-plus me-2"></i>Novo chat
+        </button>
+        
+        <div class="chat-history">
+            {% if recent_chats %}
+                {% for chat in recent_chats %}
+                    <div class="chat-item {% if chat.id == current_chat_id %}active{% endif %}" 
+                         onclick="location.href='{{ url_for('chat', chat_id=chat.id) }}'">
+                        <i class="fas fa-message me-2"></i>
+                        {{ chat.contact_name or 'Novo Chat' }}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-inbox fa-2x mb-2"></i>
+                    <p class="small">Nenhum chat recente</p>
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="user-section">
+            {% if current_user.is_authenticated %}
+                <!-- Admin Panel Link - Aparece apenas para admins -->
+                {% if current_user.role >= 2 %}
+                    <a href="{{ url_for('admin_panel') }}" class="admin-panel-link">
+                        <i class="fas fa-cog me-1"></i>Painel Admin
+                    </a>
+                {% endif %}
+                
+                <div class="dropdown">
+                    <button class="user-menu dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center me-2" 
+                                 style="width: 32px; height: 32px;">
+                                <span class="text-white fw-bold">{{ current_user.name[0]|upper }}</span>
+                            </div>
+                            <div class="text-start">
+                                <div class="small fw-bold">{{ current_user.name }}</div>
+                                <div class="x-small text-muted">
+                                    {% if current_user.role == 0 %}👤 Consumidor
+                                    {% elif current_user.role == 1 %}💼 Vendedor
+                                    {% elif current_user.role == 2 %}🧪 Teste
+                                    {% elif current_user.role == 3 %}🎯 MKT/TI
+                                    {% elif current_user.role == 4 %}⚡ Junior
+                                    {% elif current_user.role == 5 %}🚀 Dev
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        <li><a class="dropdown-item" href="{{ url_for('home') }}">
+                            <i class="fas fa-home me-2"></i>Home
+                        </a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('contacts') }}">
+                            <i class="fas fa-users me-2"></i>Contatos
+                        </a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('reports') }}">
+                            <i class="fas fa-chart-bar me-2"></i>Relatórios
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('logout') }}">
+                            <i class="fas fa-sign-out-alt me-2"></i>Sair
+                        </a></li>
+                    </ul>
+                </div>
+            {% else %}
+                <div class="text-center">
+                    <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-sm w-100 mb-2">
+                        <i class="fas fa-sign-in-alt me-1"></i>Entrar
+                    </a>
+                    <a href="{{ url_for('register') }}" class="btn btn-light btn-sm w-100">
+                        <i class="fas fa-user-plus me-1"></i>Cadastrar
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content" id="mainContent">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Mobile menu toggle
+        document.getElementById('menuToggle').addEventListener('click', function() {
+            document.getElementById('sidebar').classList.toggle('open');
+        });
+        
+        // Close sidebar when clicking outside on mobile
+        document.getElementById('mainContent').addEventListener('click', function() {
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('open');
+            }
+        });
+        
+        // Auto-resize textarea
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        }
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

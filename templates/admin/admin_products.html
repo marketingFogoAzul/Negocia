@@ -1,0 +1,152 @@
+{% extends "layout.html" %}
+{% block title %}Gerenciar Produtos{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>Gerenciar Produtos</h1>
+</div>
+
+<div class="admin-content">
+    <div class="admin-section">
+        <h2>Adicionar Novo Produto</h2>
+        <form class="admin-form" id="add-product-form">
+            <div class="form-group">
+                <label for="code">Código (SKU)</label>
+                <input type="text" id="code" required>
+            </div>
+            <div class="form-group">
+                <label for="name">Nome do Produto</label>
+                <input type="text" id="name" required>
+            </div>
+            <div class="form-group">
+                <label for="price">Preço (ex: 1800.00)</label>
+                <input type="number" id="price" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+                <label for="stock">Estoque</label>
+                <input type="number" id="stock" step="1" min="0" required>
+            </div>
+            <div class="form-group full-width">
+                <label for="colors">Cores (separadas por vírgula)</label>
+                <input type="text" id="colors" placeholder="Preto, Vermelho, Azul">
+            </div>
+            <p class="error-message full-width"></p>
+            <button type="submit" class="btn btn-primary">Adicionar Produto</button>
+        </form>
+    </div>
+
+    <div class="admin-section">
+        <h2>Produtos Cadastrados</h2>
+        
+        {% if products is not none %}
+        <table class="admin-table" id="products-table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Nome</th>
+                    <th>Preço</th>
+                    <th>Estoque</th>
+                    <th>Cores</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr data-id="{{ product.id }}">
+                    <td>{{ product.code }}</td>
+                    <td>{{ product.name }}</td>
+                    <td>R$ {{ "%.2f"|format(product.price) }}</td>
+                    <td>{{ product.stock }}</td>
+                    <td>{{ product.colors | join(', ') if product.colors else 'N/A' }}</td>
+                    <td>
+                        {% if current_user.can('remove_product') %}
+                        <button class="btn btn-sm btn-danger" onclick="deleteProduct({{ product.id }}, this)">
+                            Remover
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <p>Nenhum produto cadastrado ou erro ao buscar.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // --- Lógica para Adicionar Produto ---
+    const addForm = document.getElementById('add-product-form');
+    addForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const button = addForm.querySelector('button');
+        const errorMsg = addForm.querySelector('.error-message');
+        button.disabled = true;
+        button.textContent = 'Salvando...';
+        errorMsg.textContent = '';
+        
+        const data = {
+            code: document.getElementById('code').value,
+            name: document.getElementById('name').value,
+            price: document.getElementById('price').value,
+            stock: document.getElementById('stock').value,
+            colors: document.getElementById('colors').value,
+        };
+
+        try {
+            const response = await fetch('/api/admin/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(result.message);
+                window.location.reload(); // Recarrega a página para ver o novo produto
+            } else {
+                errorMsg.textContent = result.message;
+            }
+        } catch (err) {
+            errorMsg.textContent = 'Erro de conexão.';
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Adicionar Produto';
+        }
+    });
+
+    // --- Lógica para Remover Produto ---
+    async function deleteProduct(productId, element) {
+        if (!confirm('Tem certeza que deseja remover este produto? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+        
+        element.disabled = true;
+        element.textContent = '...';
+
+        try {
+            const response = await fetch(`/api/admin/products/${productId}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(result.message);
+                // Remove a linha da tabela
+                element.closest('tr').remove();
+            } else {
+                alert('Erro: ' + result.message);
+                element.disabled = false;
+                element.textContent = 'Remover';
+            }
+        } catch (err) {
+            alert('Erro de conexão.');
+            element.disabled = false;
+            element.textContent = 'Remover';
+        }
+    }
+</script>
+{% endblock %}
