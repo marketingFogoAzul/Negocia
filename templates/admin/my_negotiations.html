@@ -5,14 +5,13 @@
 {% block content %}
 <div class="admin-header">
     <h1>Meus Atendimentos</h1>
-    <p>Chats que estão sob sua responsabilidade.</p>
+    <p>Chats que estão sob sua responsabilidade ou disponíveis na fila.</p>
 </div>
 
 <div class="admin-content">
 
     <div class="admin-section">
         <h2><i class="fas fa-inbox"></i> Fila (Disponíveis para Assumir)</h2>
-        {% set available_chats = get_pending_reviews() %} {% set available_chats = query_db("SELECT c.id, u.name as user_name, c.created_at, p.name as product_name FROM chats c JOIN users u ON c.user_id = u.id LEFT JOIN products p ON (c.proposal_data->>'product_id')::int = p.id WHERE c.status = 'pending_review' ORDER BY c.created_at ASC") %}
 
         {% if available_chats %}
         <table class="admin-table">
@@ -43,7 +42,7 @@
             </tbody>
         </table>
         {% else %}
-        <p>Nenhuma revisão pendente. Bom trabalho!</p>
+        <p>Nenhuma revisão pendente na fila. Bom trabalho!</p>
         {% endif %}
     </div>
 
@@ -123,7 +122,7 @@
 
 {% block scripts %}
 <script>
-    // Script para o botão "Assumir"
+    // Script para o botão "Assumir" (permanece o mesmo)
     async function handleAssume(event) {
         event.preventDefault();
         const form = event.target;
@@ -134,7 +133,7 @@
         try {
             const response = await fetch(form.action, { method: 'POST' });
             const result = await response.json();
-            
+
             if (result.success) {
                 alert(result.message);
                 // Redireciona para a página do chat assumido

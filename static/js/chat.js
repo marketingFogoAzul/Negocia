@@ -6,11 +6,11 @@ const ChatModule = (function () {
     let chatWindow, chatInput, sendButton, reviewButtonContainer, reviewButton;
     let closeButton, disableIaButton;
     let chatHeader, chatStatusText, inputArea;
-    
+
     // Estado do Chat
     let currentChatId = null;
     let chatStatus = 'active';
-    let reviewRequested = false; // CORREÇÃO: Flag para "botão já clicado"
+    let reviewRequested = false; // Flag para "botão já clicado"
     let userRole = 0;
     let userName = 'Usuário';
 
@@ -29,7 +29,7 @@ const ChatModule = (function () {
         chatHeader = document.getElementById('chat-header');
         chatStatusText = document.getElementById('chat-status');
         inputArea = document.getElementById('input-area');
-        
+
         // Configura o estado
         currentChatId = config.chatId || null;
         chatStatus = config.status || 'active';
@@ -48,6 +48,9 @@ const ChatModule = (function () {
                     handleSendMessage();
                 }
             });
+             // Ajusta altura ao carregar
+            autoResizeTextarea(chatInput);
+             chatInput.addEventListener('input', () => autoResizeTextarea(chatInput));
         }
         if (reviewButton) {
             reviewButton.addEventListener('click', handleRequestReview);
@@ -58,28 +61,37 @@ const ChatModule = (function () {
         if (disableIaButton) {
             disableIaButton.addEventListener('click', handleDisableIa);
         }
-        
+
         scrollToBottom();
         updateChatUI();
     }
+
+     /** Auto-resize textarea */
+    function autoResizeTextarea(textarea) {
+        textarea.style.height = 'auto'; // Reseta altura
+        // Define a nova altura baseada no scrollHeight, mas não menor que a inicial
+        textarea.style.height = Math.max(42, textarea.scrollHeight) + 'px';
+    }
+
 
     /**
      * Atualiza a UI baseada no status do chat
      */
     function updateChatUI() {
-        
+
         // --- Lógica do Botão de Revisão (Usuário) ---
         if (reviewButtonContainer) {
-            // CORREÇÃO: Mostra se o chat está ativo, o usuário é consumidor E a revisão NUNCA foi pedida
-            if (chatStatus === 'active' && userRole === 0 && !reviewRequested) {
+            // Mostra se o chat está ativo, user é consumidor E revisão NUNCA foi pedida
+            const canRequestReview = chatStatus === 'active' && userRole === 0 && !reviewRequested;
+            if (canRequestReview) {
                 reviewButtonContainer.classList.remove('hidden');
             } else {
                 reviewButtonContainer.classList.add('hidden');
             }
         }
-        
+
         // --- Lógica dos Botões de Admin (Vendedor) ---
-        // CORREÇÃO: Só mostra se o user for admin E o chat estiver 'assumido' ou 'manual'
+        // Só mostra se for admin E chat estiver 'assumido' ou 'manual'
         const showAdminButtons = userRole >= 1 && (chatStatus === 'assumed' || chatStatus === 'manual_override');
 
         if (disableIaButton) {
@@ -91,18 +103,16 @@ const ChatModule = (function () {
                 disableIaButton.classList.add('hidden');
             }
         }
-        
+
         if (closeButton) {
             // Mostra se for admin e o chat não estiver completo
             if (userRole >= 1 && chatStatus !== 'completed') {
-                 // Vendedor (1) só pode fechar se o chat for dele (verificação no backend)
-                 // Admin (2+) pode fechar qualquer um
                 closeButton.classList.remove('hidden');
             } else {
                 closeButton.classList.add('hidden');
             }
         }
-        
+
         // --- Lógica da Barra de Digitação ---
         if (chatInput) {
             let placeholder = 'Digite sua mensagem...';
@@ -112,22 +122,22 @@ const ChatModule = (function () {
                 placeholder = 'Esta negociação foi encerrada.';
                 disabled = true;
             } else if (chatStatus === 'pending_review' && userRole === 0) {
-                // Usuário não pode digitar enquanto aguarda revisão
                 placeholder = 'Aguardando resposta do vendedor...';
                 disabled = true;
+            } else if (chatStatus === 'pending_review' && userRole >= 1) {
+                 // Admin pode responder para assumir um chat pendente
+                placeholder = 'Responda para assumir este atendimento...';
+                disabled = false;
             } else if (chatStatus === 'active' || chatStatus === 'assumed' || chatStatus === 'manual_override') {
                  placeholder = 'Digite sua mensagem...';
                  disabled = false;
-            } else if (chatStatus === 'pending_review' && userRole >= 1) {
-                placeholder = 'Assuma este chat para responder...';
-                disabled = false; // Admin pode digitar para assumir
             }
-            
+
             chatInput.disabled = disabled;
             chatInput.placeholder = placeholder;
             sendButton.disabled = disabled;
         }
-        
+
         // --- Texto do Status ---
         if (chatStatusText) {
             const statusTexts = {
@@ -148,13 +158,15 @@ const ChatModule = (function () {
         if (!chatWindow) return;
         removeLoadingBubble();
 
+        const isScrolledToBottom = chatWindow.scrollHeight - chatWindow.clientHeight <= chatWindow.scrollTop + 1;
+
         // Mensagens do sistema (centralizadas)
         if (msg.sender_type === 'system') {
             const systemDiv = document.createElement('div');
             systemDiv.classList.add('message-container', 'system');
             systemDiv.innerHTML = `<div class="message-bubble">${msg.text}</div>`;
             chatWindow.appendChild(systemDiv);
-            scrollToBottom();
+            if (isScrolledToBottom) scrollToBottom(); // Só rola se já estava no fim
             return;
         }
 
@@ -167,7 +179,7 @@ const ChatModule = (function () {
             avatarContent = '👤'; // Avatar padrão do usuário
         } else {
             // Bot ou Admin usam o logo
-            avatarContent = '<img src="/static/img/logo.png" alt="bot" style="width: 100%; height: 100%; border-radius: 50%;">';
+            avatarContent = `<img src="/static/img/logo.png" alt="logo">`;
         }
 
         // Define nome do remetente
@@ -177,7 +189,6 @@ const ChatModule = (function () {
         } else if (msg.sender_type === 'user') {
             senderName = `<div class="message-sender-name">${userName}</div>`;
         }
-        // (Bot não tem nome)
 
         container.innerHTML = `
             <div class="profile-pic">${avatarContent}</div>
@@ -188,19 +199,21 @@ const ChatModule = (function () {
                 </div>
             </div>
         `;
-        
+
         chatWindow.appendChild(container);
-        scrollToBottom();
+        if (isScrolledToBottom) scrollToBottom(); // Só rola se já estava no fim
     }
 
     /** Mostra o "digitando..." do bot */
     function showLoadingBubble() {
-        removeLoadingBubble();
+        removeLoadingBubble(); // Garante que só haja um
+        const isScrolledToBottom = chatWindow.scrollHeight - chatWindow.clientHeight <= chatWindow.scrollTop + 1;
+
         const container = document.createElement('div');
         container.classList.add('message-container', 'bot', 'loading-bubble');
         container.innerHTML = `
             <div class="profile-pic">
-                <img src="/static/img/logo.png" alt="bot" style="width: 100%; height: 100%; border-radius: 50%;">
+                <img src="/static/img/logo.png" alt="logo">
             </div>
             <div class="message-content">
                 <div class="message-bubble">
@@ -211,7 +224,7 @@ const ChatModule = (function () {
             </div>
         `;
         chatWindow.appendChild(container);
-        scrollToBottom();
+        if (isScrolledToBottom) scrollToBottom(); // Só rola se já estava no fim
     }
 
     /** Remove o "digitando..." */
@@ -236,14 +249,13 @@ const ChatModule = (function () {
             return;
         }
 
-        // Define o endpoint (Admin vs User)
         const isAdmin = userRole >= 1;
-        const url = isAdmin 
+        const url = isAdmin
             ? `/api/chat/admin_message/${currentChatId}`
             : '/api/chat/user_message';
-        
+
         const body = { message: messageText };
-        if (!isAdmin) {
+        if (!isAdmin && currentChatId) { // Só envia chat_id se já existir
             body.chat_id = currentChatId;
         }
 
@@ -251,15 +263,15 @@ const ChatModule = (function () {
         addMessageToWindow({
             sender_type: isAdmin ? 'admin' : 'user',
             text: messageText,
-            sender_name: isAdmin ? userName : userName // Usa o nome do user logado
+            sender_name: userName // Nome do usuário logado
         });
 
         const oldMessage = chatInput.value;
         chatInput.value = '';
+        autoResizeTextarea(chatInput); // Ajusta altura após limpar
         chatInput.disabled = true;
         sendButton.disabled = true;
-        
-        // Mostra loading apenas para usuários (resposta do bot)
+
         if (!isAdmin) {
             showLoadingBubble();
         }
@@ -271,29 +283,28 @@ const ChatModule = (function () {
                 body: JSON.stringify(body),
             });
             const data = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(data.message || `Erro ${response.status}`);
             }
-            
+
             removeLoadingBubble();
 
-            // Atualiza o ID do chat se for a primeira mensagem
+            // Atualiza o ID do chat se for a primeira mensagem (retorno do backend)
             if (data.chat_id && !currentChatId) {
                 currentChatId = data.chat_id;
                 if (chatHeader) {
                     chatHeader.classList.remove('hidden');
                     document.getElementById('chat-header-id').textContent = currentChatId;
                 }
-                // Atualiza a URL sem recarregar
                 window.history.pushState({}, '', `/chat/${currentChatId}`);
             }
 
-            // Adiciona a resposta (do bot ou do sistema)
-            if (data.sender_type) {
+            // Adiciona a resposta (do bot ou sistema)
+            if (data.sender_type && data.sender_type !== (isAdmin ? 'admin' : 'user')) { // Evita duplicar msg enviada
                 addMessageToWindow(data);
             }
-            
+
             // Atualiza status se o backend enviar um novo
             if (data.chat_status) {
                 chatStatus = data.chat_status;
@@ -303,28 +314,31 @@ const ChatModule = (function () {
         } catch (error) {
             console.error('Erro ao enviar mensagem:', error);
             removeLoadingBubble();
-            addMessageToWindow({ 
-                sender_type: 'system', 
-                text: 'Erro de conexão. Por favor, tente novamente.' 
+            addMessageToWindow({
+                sender_type: 'system',
+                text: 'Erro de conexão. Por favor, tente novamente.'
             });
             chatInput.value = oldMessage; // Restaura msg
+            autoResizeTextarea(chatInput); // Ajusta altura
         } finally {
             // Re-ativa a input se o chat não estiver bloqueado
-            updateChatUI();
-            chatInput.focus();
+             updateChatUI(); // Atualiza estado dos botões/input baseado no status
+             if (!chatInput.disabled) {
+                 chatInput.focus();
+             }
         }
     }
 
     /** Botão 'Solicitar Revisão' (Usuário) */
     async function handleRequestReview() {
-        if (!currentChatId) return;
+        if (!currentChatId || reviewButton.disabled) return;
 
         reviewButton.disabled = true;
-        reviewButton.textContent = 'Enviando...';
+        reviewButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
 
         try {
-            const response = await fetch(`/api/chat/request_review/${currentChatId}`, { 
-                method: 'POST' 
+            const response = await fetch(`/api/chat/request_review/${currentChatId}`, {
+                method: 'POST'
             });
             const data = await response.json();
 
@@ -332,27 +346,26 @@ const ChatModule = (function () {
                 throw new Error(data.message);
             }
 
-            // Adiciona mensagem de confirmação do sistema
             addMessageToWindow({
-                sender_type: data.sender_type,
+                sender_type: data.sender_type, // 'system'
                 text: data.message
             });
-            
-            // CORREÇÃO: Atualiza estado local e UI
+
             chatStatus = 'pending_review';
             reviewRequested = true; // Marca como clicado
-            updateChatUI(); // Esconde o botão e bloqueia a input
+            updateChatUI(); // Esconde botão, bloqueia input do user
 
         } catch (error) {
             alert('Erro: ' + error.message);
+            // Reabilita o botão apenas se o erro ocorreu
             reviewButton.disabled = false;
-            reviewButton.textContent = 'Solicitar Revisão da Proposta';
+            reviewButton.innerHTML = '<i class="fas fa-gavel"></i> Solicitar Revisão da Proposta';
         }
     }
 
     /** Botão 'Desativar IA' (Admin) */
     async function handleDisableIa() {
-        if (!currentChatId) return;
+        if (!currentChatId || disableIaButton.disabled) return;
         if (!confirm('Tem certeza que deseja desativar a IA? O atendimento será 100% manual.')) {
             return;
         }
@@ -361,32 +374,32 @@ const ChatModule = (function () {
         disableIaButton.textContent = '...';
 
         try {
-            const response = await fetch(`/api/chat/disable_ia/${currentChatId}`, { 
-                method: 'POST' 
+            const response = await fetch(`/api/chat/disable_ia/${currentChatId}`, {
+                method: 'POST'
             });
             const data = await response.json();
 
             if (!response.ok) {
                 throw new Error(data.message);
             }
-            
+
             addMessageToWindow({
-                sender_type: data.sender_type,
+                sender_type: data.sender_type, // 'system'
                 text: data.message
             });
-            
+
             chatStatus = 'manual_override';
-            updateChatUI();
+            updateChatUI(); // Atualiza texto e estado do botão
 
         } catch (error) {
             alert('Erro: ' + error.message);
-            updateChatUI(); // Re-ativa o botão se der erro
+            updateChatUI(); // Re-habilita com texto correto se der erro
         }
     }
 
    /** Botão 'Encerrar Negociação' (Admin) */
     async function handleCloseChat() {
-        if (!currentChatId) return;
+        if (!currentChatId || closeButton.disabled) return;
         if (!confirm('Tem certeza que deseja ENCERRAR esta negociação? Esta ação não pode ser desfeita.')) {
             return;
         }
@@ -395,31 +408,30 @@ const ChatModule = (function () {
         closeButton.textContent = '...';
 
         try {
-            const response = await fetch(`/api/chat/close/${currentChatId}`, { 
-                method: 'POST' 
+            const response = await fetch(`/api/chat/close/${currentChatId}`, {
+                method: 'POST'
             });
             const data = await response.json();
 
             if (!response.ok) {
                 throw new Error(data.message);
             }
-            
+
             addMessageToWindow({
-                sender_type: data.sender_type,
+                sender_type: data.sender_type, // 'system'
                 text: data.message
             });
-            
+
             chatStatus = 'completed';
-            updateChatUI(); // Desativa tudo
+            updateChatUI(); // Desativa input e botões
 
         } catch (error) {
-            // CORREÇÃO: Removido o 'D' que estava sobrando.
-            alert('Erro: ' + error.message);
+            alert('Erro: ' + error.message); // Corrigido
             closeButton.disabled = false;
             closeButton.textContent = 'Encerrar Negociação';
         }
     }
-    
+
     // Expõe a função de inicialização
     return {
         init: init

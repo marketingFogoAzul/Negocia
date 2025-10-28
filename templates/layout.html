@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ZIPBUM Negocia{% endblock %}</title>
-    
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
+
 </head>
 <body class="{% block body_class %}{% endblock %}">
-    
+
     <div class="app-container">
-        
+
         {% if current_user.is_authenticated %}
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -21,50 +21,50 @@
                     <h2><i class="fas fa-comments"></i> ZIPBUM</h2>
                 </a>
             </div>
-            
+
             <div class="sidebar-nav">
-                <a href="{{ url_for('new_chat_page') }}" class="btn btn-primary" style="width: 100%; margin: 0 0 10px 0;">
+                <a href="{{ url_for('new_chat_page') }}" class="btn btn-primary">
                     <i class="fas fa-plus"></i> Novo Chat
                 </a>
-                
+
                 {% if current_user.role >= 1 %}
                     <h3>Admin</h3>
                     <a href="{{ url_for('admin_dashboard') }}" class="{{ 'active' if 'admin_dashboard' in request.endpoint }}">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
-                    <a href="{{ url_for('admin_my_negotiations') }}" class="{{ 'admin_my_negotiations' in request.endpoint }}">
+                    <a href="{{ url_for('admin_my_negotiations') }}" class="{{ 'active' if 'admin_my_negotiations' in request.endpoint }}">
                         <i class="fas fa-headset"></i> Meus Atendimentos
                     </a>
-                    <a href="{{ url_for('admin_status') }}" class="{{ 'admin_status' in request.endpoint }}">
+                    <a href="{{ url_for('admin_status') }}" class="{{ 'active' if 'admin_status' in request.endpoint }}">
                         <i class="fas fa-server"></i> Status ZIP Negocia
                     </a>
-                    
+
                     {% if current_user.can('promote_to_junior') %}
-                    <a href="{{ url_for('admin_users') }}" class="{{ 'admin_users' in request.endpoint }}">
+                    <a href="{{ url_for('admin_users') }}" class="{{ 'active' if 'admin_users' in request.endpoint }}">
                         <i class="fas fa-users-cog"></i> Gerenciar Usuários
                     </a>
                     {% endif %}
-                    
+
                     {% if current_user.can('insert_product') %}
-                    <a href="{{ url_for('admin_products') }}" class="{{ 'admin_products' in request.endpoint }}">
+                    <a href="{{ url_for('admin_products') }}" class="{{ 'active' if 'admin_products' in request.endpoint }}">
                         <i class="fas fa-box-open"></i> Editar Itens
                     </a>
                     {% endif %}
-                    
+
                     {% if current_user.can('view_all_negotiations') %}
-                    <a href="{{ url_for('admin_negotiations') }}" class="{{ 'admin_negotiations' in request.endpoint }}">
+                    <a href="{{ url_for('admin_negotiations') }}" class="{{ 'active' if 'admin_negotiations' in request.endpoint }}">
                         <i class="fas fa-history"></i> Histórico de Conversas
                     </a>
                     {% endif %}
-                    
+
                     {% if current_user.can('view_general_attendance') %}
-                    <a href="{{ url_for('admin_all_negotiations') }}" class="{{ 'admin_all_negotiations' in request.endpoint }}">
+                    <a href="{{ url_for('admin_all_negotiations') }}" class="{{ 'active' if 'admin_all_negotiations' in request.endpoint }}">
                         <i class="fas fa-sitemap"></i> Atendimentos (Geral)
                     </a>
                     {% endif %}
-                    
+
                     {% if current_user.can('view_logs') %}
-                     <a href="{{ url_for('admin_logs') }}" class="{{ 'admin_logs' in request.endpoint }}">
+                     <a href="{{ url_for('admin_logs') }}" class="{{ 'active' if 'admin_logs' in request.endpoint }}">
                         <i class="fas fa-clipboard-list"></i> Logs de Auditoria
                     </a>
                     {% endif %}
@@ -75,16 +75,16 @@
                     <div class="chat-history-list">
                         {% if recent_chats %}
                             {% for chat in recent_chats %}
-                                <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}" 
-                                   class="chat-history-item {{ 'active' if chat.id == chat_id }}">
+                                <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}"
+                                   class="chat-history-item {{ 'active' if chat_id and chat.id == chat_id }}">
                                     <div class="chat-history-info">
                                         <div class="chat-history-title">{{ chat.product_name or 'Chat #' ~ chat.id }}</div>
-                                        <div class="chat-history-date">{{ chat.status }}</div>
+                                        <div class="chat-history-date">{{ chat.status | replace('_', ' ') }}</div>
                                     </div>
                                 </a>
                             {% endfor %}
                         {% else %}
-                            <p style="padding: 0 20px; color: var(--color-text-muted); font-size: 0.9rem;">
+                            <p style="padding: 0 20px; color: var(--color-text-muted); font-size: 0.85rem;">
                                 Nenhum chat recente.
                             </p>
                         {% endif %}
@@ -120,7 +120,7 @@
         {% endif %}
 
         <div class="main-content {% if not current_user.is_authenticated %}centered{% endif %}">
-            
+
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     <div class="flash-messages">
@@ -131,11 +131,9 @@
                 {% endif %}
             {% endwith %}
 
-            {% block content %}{% endblock %}
-        </div>
+            {% block content %}{% endblock %} </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {% block scripts %}{% endblock %}
-</body>
+    {% block scripts %}{% endblock %} </body>
 </html>
