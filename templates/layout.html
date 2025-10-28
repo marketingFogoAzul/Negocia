@@ -38,6 +38,8 @@
             padding: 0.5rem;
             transition: transform 0.3s ease;
             z-index: 1000;
+            display: flex; /* Adicionado para layout flex */
+            flex-direction: column; /* Adicionado para layout flex */
         }
         
         .sidebar-header {
@@ -90,7 +92,6 @@
         .user-section {
             padding: 1rem;
             border-top: 1px solid #4a4a4a;
-            margin-top: auto;
         }
         
         .user-menu {
@@ -312,7 +313,8 @@
             {% endif %}
         </div>
         
-        <div class="user-section">
+        <div class="mt-auto"> <!-- Adicionado para empurrar para o rodapé -->
+            <div class="user-section">
             {% if current_user.is_authenticated %}
                 <!-- Admin Panel Link - Aparece apenas para admins -->
                 {% if current_user.role >= 2 %}
@@ -330,15 +332,16 @@
                             </div>
                             <div class="text-start">
                                 <div class="small fw-bold">{{ current_user.name }}</div>
+                                {% if current_user.role != 0 %}
                                 <div class="x-small text-muted">
-                                    {% if current_user.role == 0 %}👤 Consumidor
-                                    {% elif current_user.role == 1 %}💼 Vendedor
+                                    {% if current_user.role == 1 %}💼 Vendedor
                                     {% elif current_user.role == 2 %}🧪 Teste
                                     {% elif current_user.role == 3 %}🎯 MKT/TI
                                     {% elif current_user.role == 4 %}⚡ Junior
                                     {% elif current_user.role == 5 %}🚀 Dev
                                     {% endif %}
                                 </div>
+                                {% endif %}
                             </div>
                         </div>
                     </button>
@@ -368,6 +371,7 @@
                     </a>
                 </div>
             {% endif %}
+            </div>
         </div>
     </div>
 

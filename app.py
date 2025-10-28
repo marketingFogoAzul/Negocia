@@ -1,9 +1,10 @@
 import os
 import psycopg2
+from psycopg2.extras import RealDictCursor
 import json
 import re
 import google.generativeai as genai
-from psycopg2.extras import RealDictCursor
+
 from dotenv import load_dotenv
 from flask import (
     Flask, render_template, request, jsonify, session, redirect, url_for, flash, abort
@@ -327,21 +328,25 @@ def logout():
     flash("Você saiu com sucesso.", "success")
     return redirect(url_for('login'))
 
-@app.route('/')
-@app.route('/home')
-@login_required
-def home():
-    # Buscar chats recentes
-    recent_chats = query_db("""
+def get_recent_chats(user_id):
+    """Busca os chats recentes do usuário para a sidebar."""
+    return query_db("""
         SELECT c.id, c.contact_name, c.status, c.created_at, c.last_activity, 
-               c.last_message, c.unread_count,
+               c.last_message, c.unread_count, c.assigned_to,
                COALESCE(p.name, 'Nova Negociação') as product_name
         FROM chats c 
         LEFT JOIN products p ON c.product_id = p.id
         WHERE c.user_id = %s 
         ORDER BY c.last_activity DESC 
         LIMIT 10
-    """, (current_user.id,)) or []
+    """, (user_id,)) or []
+
+@app.route('/')
+@app.route('/home')
+@login_required
+def home():
+    # Buscar chats recentes
+    recent_chats = get_recent_chats(current_user.id)
     
     # Estatísticas
     total_chats = query_db("SELECT COUNT(id) as c FROM chats WHERE user_id = %s", (current_user.id,), one=True) or {'c': 0}
@@ -353,19 +358,7 @@ def home():
                          active_chats=active_chats['c'])
 
 # ... (restante das suas rotas mantidas)
-    # Busca chats recentes do usuário para a sidebar - CORRIGIDO
-    recent_chats = query_db("""
-        SELECT c.id, c.contact_name, c.status, c.created_at, c.last_activity, 
-               c.last_message, c.unread_count, c.assigned_to,
-               COALESCE(p.name, 'Nova Negociação') as product_name
-        FROM chats c 
-        LEFT JOIN products p ON c.product_id = p.id
-        WHERE c.user_id = %s 
-        ORDER BY c.last_activity DESC 
-        LIMIT 10
-    """, (current_user.id,))
-    
-    return render_template('home.html', recent_chats=recent_chats or [])
+
 
 @app.route('/new_chat')  # CORRIGIDO: era '/chat'
 @login_required
@@ -374,17 +367,8 @@ def new_chat_page():
     session.pop('current_chat_id', None)
     session.pop('negotiation_data', None)
     
-    # Busca chats recentes para sidebar - CORRIGIDO
-    recent_chats = query_db("""
-        SELECT c.id, c.contact_name, c.status, c.created_at, c.last_activity,
-               c.last_message, c.unread_count,
-               COALESCE(p.name, 'Nova Negociação') as product_name
-        FROM chats c 
-        LEFT JOIN products p ON c.product_id = p.id
-        WHERE c.user_id = %s 
-        ORDER BY c.last_activity DESC 
-        LIMIT 10
-    """, (current_user.id,))
+    # Busca chats recentes para sidebar
+    recent_chats = get_recent_chats(current_user.id)
     
     return render_template('new_chat.html', recent_chats=recent_chats or [])  # CORRIGIDO: template correto
 
@@ -415,17 +399,8 @@ def chat(chat_id):  # CORRIGIDO: nome da função
         ORDER BY m.timestamp ASC
     """, (chat_id,))
     
-    # Busca chats recentes para sidebar - CORRIGIDO
-    recent_chats = query_db("""
-        SELECT c.id, c.contact_name, c.status, c.created_at, c.last_activity,
-               c.last_message, c.unread_count,
-               COALESCE(p.name, 'Nova Negociação') as product_name
-        FROM chats c 
-        LEFT JOIN products p ON c.product_id = p.id
-        WHERE c.user_id = %s 
-        ORDER BY c.last_activity DESC 
-        LIMIT 10
-    """, (current_user.id,))
+    # Busca chats recentes para sidebar
+    recent_chats = get_recent_chats(current_user.id)
     
     session.pop('chat_state', None)
     return render_template('chat.html', 
@@ -711,7 +686,7 @@ def process_chat_state_machine(user_message, user):
         )
         
         if product:
-            bot_response = f"Produto encontrado: {product['name']}. (Estoque: {product['stock']}). Quantas unidades você deseja?"
+            bot_response = f"Produto encontrado: {product['name']}. (Estoque: {product['stock']}). Quantas unidades você deseja%s"
             negotiation = {
                 'product_id': product['id'], 
                 'product_name': product['name'],
@@ -741,18 +716,18 @@ def process_chat_state_machine(user_message, user):
                 
                 if product_colors and product_colors['colors'] and len(product_colors['colors']) > 0:
                     negotiation['available_colors'] = product_colors['colors']
-                    bot_response = f"Entendido, {quantity} unidades. Qual cor você prefere? ({', '.join(product_colors['colors'])})"
+                    bot_response = f"Entendido, {quantity} unidades. Qual cor você prefere%s ({', '.join(product_colors['colors'])})"
                     state = 'AWAITING_COLOR'
                 else:
                     negotiation['color'] = 'N/A'
-                    bot_response = "Ótimo. Agora, qual o tipo de entrega? (Ex: Padrão, Expressa)"
+                    bot_response = "Ótimo. Agora, qual o tipo de entrega%s (Ex: Padrão, Expressa)"
                     state = 'AWAITING_DELIVERY'
             else:
                 bot_response = f"Quantidade inválida. Temos {negotiation.get('max_stock', 0)} em estoque."
                 state = 'AWAITING_QUANTITY'
                 
         except (ValueError, KeyError):
-            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja?"
+            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja%s"
             state = 'START'
             negotiation = {}
 
@@ -761,7 +736,7 @@ def process_chat_state_machine(user_message, user):
             chosen_color = user_message.strip().capitalize()
             if 'available_colors' in negotiation and chosen_color in negotiation['available_colors']:
                 negotiation['color'] = chosen_color
-                bot_response = "Cor selecionada. Agora, qual o tipo de entrega? (Ex: Padrão, Expressa)"
+                bot_response = "Cor selecionada. Agora, qual o tipo de entrega%s (Ex: Padrão, Expressa)"
                 state = 'AWAITING_DELIVERY'
             else:
                 colors_str = ", ".join(negotiation.get('available_colors', []))
@@ -769,7 +744,7 @@ def process_chat_state_machine(user_message, user):
                 state = 'AWAITING_COLOR'
                 
         except KeyError:
-            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja?"
+            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja%s"
             state = 'START'
             negotiation = {}
 
@@ -798,7 +773,7 @@ def process_chat_state_machine(user_message, user):
             )
             
         except KeyError:
-            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja?"
+            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja%s"
             state = 'START'
             negotiation = {}
             
