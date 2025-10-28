@@ -1,5 +1,7 @@
 {% extends "layout_chat.html" %} {% block title %}Chat de Negociação{% endblock %}
-{% block body_class %}admin-layout{% endblock %} {% block content %}
+{# body_class removido daqui pois está no layout_chat #}
+
+{% block content %}
 <div class="chat-container">
 
     <div class="chat-header" id="chat-header" {% if not chat_id %}class="hidden"{% endif %}>
@@ -20,12 +22,14 @@
             </span>
         </div>
         <div class="chat-actions">
+            {% if current_user.is_authenticated and current_user.role >=1 %} {# Só mostra botões admin se for admin #}
             <button class="btn btn-sm btn-warning hidden" id="disable-ia-button">
                 Desativar IA
             </button>
             <button class="btn btn-sm btn-danger hidden" id="close-chat-button">
                 Encerrar Negociação
             </button>
+            {% endif %}
         </div>
     </div>
 
@@ -43,7 +47,7 @@
                             {% if msg.sender_type == 'admin' %}
                                 <div class="message-sender-name">{{ msg.sender_name | default('Vendedor', true) }}</div>
                             {% elif msg.sender_type == 'user' %}
-                                <div class="message-sender-name">{{ chat_data.user_name or current_user.name }}</div>
+                                <div class="message-sender-name">{{ chat_data.user_name if chat_data else current_user.name }}</div> {# Corrigido para mostrar nome correto #}
                             {% endif %}
 
                             <div class="message-bubble">
@@ -58,11 +62,14 @@
 
     <div class="chat-input-area" id="input-area">
 
+        {# Botão só aparece para user (role 0) e se chat_id existir #}
+        {% if current_user.is_authenticated and current_user.role == 0 and chat_id %}
         <div class="hidden" id="review-button-container">
             <button id="review-button" class="btn btn-warning">
                 <i class="fas fa-gavel"></i> Solicitar Revisão da Proposta
             </button>
         </div>
+        {% endif %}
 
         <div class="chat-input-row" id="chat-input-row">
             <textarea id="chat-input" placeholder="Digite sua mensagem..." rows="1"></textarea>
@@ -76,30 +83,18 @@
 {% endblock %}
 
 {% block scripts %}
+    {# Script do chat agora é carregado aqui #}
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
     <script>
         // Passa os dados do Python (Flask) para o JavaScript (ChatModule)
         ChatModule.init({
             chatId: {{ chat_id | tojson }},
-            status: "{{ chat_data.status | default('active', true) }}",
-            reviewRequested: {{ chat_data.review_requested | default(false) | tojson }},
+            status: "{{ chat_data.status | default('active', true) if chat_data else 'active' }}", {# Default status if no chat_data #}
+            reviewRequested: {{ chat_data.review_requested | default(false) | tojson if chat_data else 'false' }}, {# Default if no chat_data #}
             userName: "{{ current_user.name }}",
             userRole: {{ current_user.role | default(0) }}
         });
 
-        // Auto-resize do textarea
-        const chatInput = document.getElementById('chat-input');
-        if (chatInput) {
-            // Ajusta no carregamento inicial se houver texto
-             if (chatInput.value) {
-                chatInput.style.height = 'auto';
-                chatInput.style.height = (chatInput.scrollHeight) + 'px';
-            }
-            // Ajusta ao digitar
-            chatInput.addEventListener('input', function() {
-                this.style.height = 'auto';
-                this.style.height = (this.scrollHeight) + 'px';
-            });
-        }
+        // Auto-resize do textarea (movido para chat.js init para garantir execução)
     </script>
 {% endblock %}

@@ -1,5 +1,7 @@
-{% extends "layout_admin.html" %}
+{% extends base_template | default("layout_admin.html") %}
+
 {% block title %}Logs de Auditoria{% endblock %}
+{% block body_class %}admin-layout{% endblock %} {# body_class aqui está ok #}
 
 {% block content %}
 <div class="admin-header">
@@ -23,7 +25,7 @@
                 <tbody>
                     {% for log in logs %}
                     <tr>
-                        <td style="white-space: nowrap;">{{ log.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+                        <td style="white-space: nowrap;">{{ log.timestamp.strftime('%d/%m/%Y %H:%M:%S') if log.timestamp else 'N/A' }}</td>
                         <td>{{ log.user_email }}</td>
                         <td style="font-weight: 600;">{{ log.action }}</td>
                         <td style="max-width: 300px; word-break: break-all;">{{ log.details | default('N/A', true) }}</td>
@@ -33,19 +35,20 @@
                 </tbody>
             </table>
 
+            {# Paginação usa links AJAX #}
             <div class="pagination">
                 {% if current_page > 1 %}
-                    <a href="{{ url_for('admin_logs', page=current_page-1) }}" class="btn btn-sm btn-gray">&laquo; Anterior</a>
+                    <a href="{{ url_for('admin_logs', page=current_page-1) }}" class="btn btn-sm btn-gray ajax-link">&laquo; Anterior</a>
                 {% else %}
-                    <span class="btn btn-sm btn-gray" style="opacity: 0.5; cursor: not-allowed;">&laquo; Anterior</span>
+                    <span class="btn btn-sm btn-gray disabled" style="opacity: 0.5; cursor: not-allowed;">&laquo; Anterior</span>
                 {% endif %}
                 
                 <span>Página {{ current_page }} de {{ total_pages }}</span>
                 
                 {% if current_page < total_pages %}
-                    <a href="{{ url_for('admin_logs', page=current_page+1) }}" class="btn btn-sm btn-gray">Próxima &raquo;</a>
+                    <a href="{{ url_for('admin_logs', page=current_page+1) }}" class="btn btn-sm btn-gray ajax-link">Próxima &raquo;</a>
                 {% else %}
-                    <span class="btn btn-sm btn-gray" style="opacity: 0.5; cursor: not-allowed;">Próxima &raquo;</span>
+                    <span class="btn btn-sm btn-gray disabled" style="opacity: 0.5; cursor: not-allowed;">Próxima &raquo;</span>
                 {% endif %}
             </div>
 
@@ -54,4 +57,8 @@
         {% endif %}
     </div>
 </div>
-{% endblock %}
+{% endblock content %}
+
+{% block scripts %}
+{# Nenhum script específico para esta página, a lógica AJAX está no layout #}
+{% endblock scripts %}

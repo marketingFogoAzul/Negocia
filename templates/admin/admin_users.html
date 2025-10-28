@@ -1,4 +1,5 @@
-{% extends "layout_admin.html" %}
+{% extends base_template | default("layout_admin.html") %}
+
 {% block title %}Gerenciar Usuários{% endblock %}
 {% block body_class %}admin-layout{% endblock %}
 
@@ -11,6 +12,7 @@
 <div class="admin-content">
     
     <div class="admin-section">
+        {# Formulário de busca NÃO usa AJAX por enquanto, recarrega a página #}
         <form method="GET" action="{{ url_for('admin_users') }}" class="search-form">
             <div class="form-group">
                 <label for="q">Buscar (Nome, Email, ID ou Cargo)</label>
@@ -58,20 +60,26 @@
                     </td>
                     <td>
                         <select class="role-select" data-userid="{{ user.id }}" style="background-color: var(--color-bg-tertiary); color: white; padding: 5px; border-radius: 5px;">
+                            {# Permite selecionar até UM NÍVEL ABAIXO do cargo do admin atual #}
                             {% for i in range(current_user.role) %}
+                                {# Não mostra Dev (5) se a flag estiver ativa e admin não for Dev #}
+                                {% if not (i == 5 and dev_activated and current_user.role != 5) %}
                                 <option value="{{ i }}" {{ 'selected' if i == user.role else '' }}>
                                     {% if i == 0 %}Consumidor
                                     {% elif i == 1 %}Vendedor
                                     {% elif i == 2 %}Teste
                                     {% elif i == 3 %}MKT/TI
                                     {% elif i == 4 %}Junior
-                                    {% else %}Cargo {{ i }}
+                                    {% elif i == 5 %}Dev {# Só visível se admin for Dev ou flag inativa #}
+                                    {% else %}Cargo {{ i }} {# Improvável #}
                                     {% endif %}
                                 </option>
+                                {% endif %}
                             {% endfor %}
                         </select>
                     </td>
                     <td class="actions">
+                        {# Usa JS inline para chamar a função que estará no bloco scripts #}
                         <button class="btn btn-sm btn-primary" onclick="promoteUser({{ user.id }})">
                             Salvar
                         </button>
@@ -85,12 +93,15 @@
         {% endif %}
     </div>
 </div>
-{% endblock %}
+{% endblock content %}
 
 {% block scripts %}
 <script>
-    async function promoteUser(userId) {
-        const row = document.querySelector(`tr[data-id="${userId}"]`);
+    // Define a função no escopo global ou anexa a window para ser acessível
+    window.promoteUser = async function(userId) {
+        const row = document.querySelector(`#users-table tr[data-id="${userId}"]`);
+        if (!row) return; // Segurança: sai se a linha não for encontrada
+
         const select = row.querySelector('.role-select');
         const button = row.querySelector('.btn-primary');
         const newRole = select.value;
@@ -105,16 +116,27 @@
                 body: JSON.stringify({ userId: userId, newRole: newRole })
             });
             const result = await response.json();
-            alert(result.message);
+            alert(result.message); // Mostra o resultado da API
+
             if (response.ok) {
-                window.location.reload(); // Recarrega para refletir a mudança
+                // Atualiza o texto do "Cargo Atual" na tabela dinamicamente
+                const currentRoleCell = row.cells[3]; // A 4ª célula (índice 3)
+                const roleTextMap = {
+                    0: "Consumidor", 1: "Vendedor", 2: "Teste", 3: "MKT/TI", 4: "Junior", 5: "Dev"
+                };
+                currentRoleCell.textContent = `${roleTextMap[newRole] || 'Desconhecido'} (${newRole})`;
+            } else {
+                 // Se deu erro na API, reverte a seleção no dropdown para o valor original
+                 // Precisaria saber o valor original, talvez armazenar num data attribute
+                 console.error("Falha ao atualizar cargo:", result.message);
             }
         } catch (err) {
-            alert('Erro de conexão.');
+            alert('Erro de conexão ao tentar salvar.');
+            console.error("Erro de rede:", err);
         } finally {
             button.disabled = false;
             button.textContent = 'Salvar';
         }
     }
 </script>
-{% endblock %}
+{% endblock scripts %}

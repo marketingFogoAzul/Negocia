@@ -1,7 +1,10 @@
-{% extends "layout_admin.html" %} {% block title %}Dashboard{% endblock %}
+{% extends base_template | default("layout_admin.html") %} {# Herda da variável passada ou do layout completo #}
+
+{% block title %}Dashboard{% endblock %}
 {% block body_class %}admin-layout{% endblock %}
 
 {% block content %}
+{# O conteúdo visível da página vem aqui DENTRO do bloco content #}
 <div class="admin-header">
     <h1>Dashboard</h1>
     <p>Visão geral dos seus atendimentos e da fila.</p>
@@ -27,9 +30,14 @@
     <div class="admin-section">
         <h2>Atendimentos Disponíveis para Assumir</h2>
         <p>A fila de atendimentos pendentes pode ser vista na página "Meus Atendimentos".</p>
-        <a href="{{ url_for('admin_my_negotiations') }}" class="btn btn-primary">
+        {# Link interno agora usa a classe ajax-link #}
+        <a href="{{ url_for('admin_my_negotiations') }}" class="btn btn-primary ajax-link">
             Ver Fila de Atendimento
         </a>
     </div>
 </div>
-{% endblock %}
+{% endblock content %}
+
+{% block scripts %}
+{# Scripts específicos para esta página iriam aqui. Nenhum neste caso. #}
+{% endblock scripts %}

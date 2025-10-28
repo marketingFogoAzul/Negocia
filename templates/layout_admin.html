@@ -5,7 +5,7 @@
 
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <a href="{{ url_for('admin_dashboard') }}" style="text-decoration: none;">
+            <a href="{{ url_for('admin_dashboard') }}" style="text-decoration: none;" class="ajax-link">
                 <h2><i class="fas fa-cog"></i> ADMIN</h2>
             </a>
         </div>
@@ -17,45 +17,48 @@
 
             {% if current_user.is_authenticated and current_user.role >= 1 %}
                 <h3>Admin</h3>
-                <a href="{{ url_for('admin_dashboard') }}" class="{{ 'active' if 'admin_dashboard' in request.endpoint }}">
+                <a href="{{ url_for('admin_dashboard') }}" class="ajax-link {{ 'active' if 'admin_dashboard' in request.endpoint or '/admin' == request.path }}"> {# Marca ativo para /admin também #}
                     <i class="fas fa-tachometer-alt"></i> Dashboard
                 </a>
-                <a href="{{ url_for('admin_my_negotiations') }}" class="{{ 'active' if 'admin_my_negotiations' in request.endpoint }}">
+                <a href="{{ url_for('admin_my_negotiations') }}" class="ajax-link {{ 'active' if 'admin_my_negotiations' in request.endpoint }}">
                     <i class="fas fa-headset"></i> Meus Atendimentos
                 </a>
-                <a href="{{ url_for('admin_status') }}" class="{{ 'active' if 'admin_status' in request.endpoint }}">
+                <a href="{{ url_for('admin_status') }}" class="ajax-link {{ 'active' if 'admin_status' in request.endpoint }}">
                     <i class="fas fa-server"></i> Status ZIP Negocia
                 </a>
 
                 {% if current_user.can('promote_to_junior') %}
-                <a href="{{ url_for('admin_users') }}" class="{{ 'active' if 'admin_users' in request.endpoint }}">
+                <a href="{{ url_for('admin_users') }}" class="ajax-link {{ 'active' if 'admin_users' in request.endpoint }}">
                     <i class="fas fa-users-cog"></i> Gerenciar Usuários
                 </a>
-                <a href="{{ url_for('admin_filters') }}" class="{{ 'active' if 'admin_filters' in request.endpoint }}">
+                <a href="{{ url_for('admin_filters') }}" class="ajax-link {{ 'active' if 'admin_filters' in request.endpoint }}">
                     <i class="fas fa-robot"></i> Filtrar IA
+                </a>
+                <a href="{{ url_for('admin_webrtc') }}" class="ajax-link {{ 'active' if 'admin_webrtc' in request.endpoint }}">
+                    <i class="fas fa-phone-alt"></i> WebRTC Config
                 </a>
                 {% endif %}
 
                 {% if current_user.can('insert_product') %}
-                <a href="{{ url_for('admin_products') }}" class="{{ 'active' if 'admin_products' in request.endpoint }}">
+                <a href="{{ url_for('admin_products') }}" class="ajax-link {{ 'active' if 'admin_products' in request.endpoint }}">
                     <i class="fas fa-box-open"></i> Editar Itens
                 </a>
                 {% endif %}
 
                 {% if current_user.can('view_all_negotiations') %}
-                <a href="{{ url_for('admin_negotiations') }}" class="{{ 'active' if 'admin_negotiations' in request.endpoint }}">
+                <a href="{{ url_for('admin_negotiations') }}" class="ajax-link {{ 'active' if 'admin_negotiations' in request.endpoint }}">
                     <i class="fas fa-history"></i> Histórico de Conversas
                 </a>
                 {% endif %}
 
                 {% if current_user.can('view_general_attendance') %}
-                <a href="{{ url_for('admin_all_negotiations') }}" class="{{ 'active' if 'admin_all_negotiations' in request.endpoint }}">
+                <a href="{{ url_for('admin_all_negotiations') }}" class="ajax-link {{ 'active' if 'admin_all_negotiations' in request.endpoint }}">
                     <i class="fas fa-sitemap"></i> Atendimentos (Geral)
                 </a>
                 {% endif %}
 
                 {% if current_user.can('view_logs') %}
-                 <a href="{{ url_for('admin_logs') }}" class="{{ 'active' if 'admin_logs' in request.endpoint }}">
+                 <a href="{{ url_for('admin_logs') }}" class="ajax-link {{ 'active' if 'admin_logs' in request.endpoint }}">
                     <i class="fas fa-clipboard-list"></i> Logs de Auditoria
                 </a>
                 {% endif %}
@@ -89,7 +92,7 @@
         </div>
     </div>
 
-    <div class="main-content">
+    <div class="main-content" id="main-content-ajax">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <div class="flash-messages">
@@ -103,4 +106,164 @@
         {% block content %}{% endblock %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{# Script AJAX para carregar conteúdo dinamicamente #}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const mainContent = document.getElementById('main-content-ajax');
+        const sidebarNav = document.querySelector('.sidebar-nav');
+
+        // Função para executar scripts dentro do HTML carregado via AJAX
+        function executeScripts(containerElement) {
+            // Remove scripts antigos associados a esta função para evitar duplicação
+            const oldAjaxScripts = document.querySelectorAll('script[data-ajax-script="true"]');
+            oldAjaxScripts.forEach(s => s.remove());
+
+            const scripts = containerElement.querySelectorAll('script');
+            scripts.forEach(originalScript => {
+                const newScript = document.createElement('script');
+                newScript.setAttribute('data-ajax-script', 'true'); // Marca o script como adicionado via AJAX
+                if (originalScript.src) {
+                    newScript.src = originalScript.src;
+                    newScript.async = false; // Tenta carregar em ordem
+                } else {
+                    newScript.textContent = originalScript.textContent;
+                }
+                document.body.appendChild(newScript); // Adiciona ao body
+            });
+        }
+
+
+        // Função para carregar conteúdo via AJAX
+        async function loadContent(url, pushState = true) {
+            // Adiciona um indicador visual de loading (opcional)
+            mainContent.style.opacity = '0.5';
+            mainContent.style.pointerEvents = 'none'; // Impede interação durante o loading
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest' // Cabeçalho essencial
+                    }
+                });
+
+                const responseText = await response.text(); // Lê o corpo da resposta
+
+                if (!response.ok) {
+                    // Tenta obter mensagem de erro do corpo, se houver
+                    let errorMsg = `HTTP error! status: ${response.status}`;
+                    try {
+                        const errorData = JSON.parse(responseText); // Tenta JSON primeiro
+                        errorMsg = errorData.message || errorMsg;
+                    } catch (e) {
+                         // Se não for JSON, usa o texto ou extrai do HTML de erro
+                         const match = responseText.match(/<title>(.*?)<\/title>/i);
+                         if (match && match[1]) {
+                             errorMsg = match[1]; // Ex: "403 Forbidden"
+                         } else {
+                             // Pega a primeira linha ou primeiros 100 caracteres como fallback
+                             errorMsg = responseText.split('\n')[0].substring(0, 100) || errorMsg;
+                         }
+                    }
+                     console.error('AJAX Error Response Body:', responseText); // Log completo para debug
+                    throw new Error(errorMsg);
+                }
+
+                // Extrai o conteúdo principal (assumindo que está dentro de um elemento com id="ajax-content-wrapper" no layout_partial)
+                // Ou simplesmente insere todo o HTML retornado se layout_partial só tiver o bloco content
+                mainContent.innerHTML = responseText;
+
+                // Executa quaisquer scripts que possam estar no HTML carregado
+                executeScripts(mainContent);
+
+                // Atualiza a URL na barra de endereço e o título da página
+                if (pushState) {
+                    history.pushState({ path: url }, '', url);
+                }
+                 // Tenta extrair o título do novo conteúdo (se existir)
+                 // Procura por um h1 dentro do admin-header como fallback
+                 const headerTitle = mainContent.querySelector('.admin-header h1');
+                 if (headerTitle) {
+                     document.title = headerTitle.textContent.trim() + " - Admin";
+                 } else {
+                     // Tenta obter o título do link clicado
+                     const activeLink = sidebarNav.querySelector(`a.ajax-link[href="${url.split('?')[0]}"]`);
+                     document.title = activeLink ? activeLink.textContent.trim() + " - Admin" : "Admin Panel";
+                 }
+
+
+                // Atualiza a classe 'active' na sidebar
+                updateActiveLink(url);
+
+            } catch (error) {
+                console.error('Erro ao carregar conteúdo via AJAX:', error);
+                mainContent.innerHTML = `<div style="padding: 20px; color: var(--color-danger);">
+                                            <strong>Erro ao carregar:</strong> ${error.message}<br>
+                                            Verifique a consola para mais detalhes.
+                                         </div>`;
+            } finally {
+                 mainContent.style.opacity = '1'; // Remove o loading
+                 mainContent.style.pointerEvents = 'auto'; // Reabilita interação
+            }
+        }
+
+        // Função para atualizar o link ativo na sidebar
+        function updateActiveLink(url) {
+            const currentPath = url.split('?')[0]; // Ignora query parameters
+            sidebarNav.querySelectorAll('a.ajax-link').forEach(link => {
+                 const linkPath = link.getAttribute('href');
+                 let isActive = linkPath === currentPath;
+                 // Trata o caso especial de /admin ser o mesmo que /admin/dashboard
+                 if ((currentPath === '/admin' || currentPath === '/admin/dashboard') &&
+                     (linkPath === '/admin' || linkPath === '/admin/dashboard')) {
+                     isActive = true;
+                 }
+
+                if (isActive) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+        }
+
+        // Intercepta cliques nos links da sidebar com a classe 'ajax-link'
+        sidebarNav.addEventListener('click', function(event) {
+            const link = event.target.closest('a.ajax-link');
+            if (link) {
+                event.preventDefault(); // Impede a navegação normal
+                const url = link.getAttribute('href');
+                // Evita recarregar a mesma página
+                const currentFullUrl = window.location.pathname + window.location.search;
+                if (url !== currentFullUrl && url !== currentFullUrl.split('?')[0]) {
+                     loadContent(url);
+                }
+            }
+        });
+
+        // Lida com os botões de voltar/avançar do navegador
+        window.addEventListener('popstate', function(event) {
+            if (event.state && event.state.path) {
+                // Carrega o conteúdo do estado anterior sem adicionar ao histórico
+                loadContent(event.state.path, false);
+            } else {
+                 // Fallback: carrega o dashboard se não houver estado e não estivermos já lá
+                 const dashboardUrl = '{{ url_for("admin_dashboard") }}';
+                 if (window.location.pathname !== dashboardUrl && window.location.pathname !== '/admin') {
+                      loadContent(dashboardUrl, false);
+                 }
+            }
+        });
+
+        // Adiciona o estado inicial ao histórico
+        history.replaceState({ path: window.location.pathname + window.location.search }, '', window.location.pathname + window.location.search);
+        updateActiveLink(window.location.pathname); // Marca o link ativo inicial
+
+    });
+</script>
+{# Scripts específicos de cada página admin serão carregados aqui pelo AJAX #}
+{% block page_scripts %}{% endblock %}
 {% endblock %}

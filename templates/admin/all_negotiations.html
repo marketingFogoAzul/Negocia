@@ -1,4 +1,5 @@
-{% extends "layout_admin.html" %}
+{% extends base_template | default("layout_admin.html") %}
+
 {% block title %}Atendimentos (Geral){% endblock %}
 {% block body_class %}admin-layout{% endblock %}
 
@@ -35,8 +36,9 @@
                         <td>#{{ chat.id }}</td>
                         <td>{{ chat.user_name }}</td>
                         <td><span class="status-{{chat.status}}">{{ chat.status }}</span></td>
-                        <td style="white-space: nowrap;">{{ chat.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td style="white-space: nowrap;">{{ chat.created_at.strftime('%d/%m/%Y %H:%M') if chat.created_at else 'N/A' }}</td>
                         <td>
+                            {# Link para chat NÃO é ajax #}
                             <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}" class="btn btn-sm btn-gray">
                                 Ver Histórico
                             </a>
@@ -57,4 +59,8 @@
     {% endif %}
 
 </div>
-{% endblock %}
+{% endblock content %}
+
+{% block scripts %}
+{# Nenhum script específico para esta página #}
+{% endblock scripts %}

@@ -1,0 +1,108 @@
+{% extends base_template | default("layout_admin.html") %}
+
+{% block title %}Configurações WebRTC{% endblock %}
+{% block body_class %}admin-layout{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>Configurações WebRTC</h1>
+    <p>Ative ou desative funcionalidades de chamada para utilizadores e administradores.</p>
+</div>
+
+<div class="admin-content">
+    <div class="admin-section">
+        <h2>Funcionalidades WebRTC</h2>
+        <table class="admin-table webrtc-table">
+            <thead>
+                <tr>
+                    <th>Funcionalidade</th>
+                    <th>Acesso Utilizador</th>
+                    <th>Acesso Admin</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for feature in features %}
+                <tr data-feature-id="{{ feature.id }}">
+                    <td><strong>{{ feature.name }}</strong></td>
+                    <td>
+                        <label class="switch">
+                            <input type="checkbox" class="webrtc-toggle" data-access="user" {{ 'checked' if feature.user_enabled else '' }}>
+                            <span class="slider round"></span>
+                        </label>
+                    </td>
+                    <td>
+                        <label class="switch">
+                            <input type="checkbox" class="webrtc-toggle" data-access="admin" {{ 'checked' if feature.admin_enabled else '' }}>
+                            <span class="slider round"></span>
+                        </label>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+         <p style="margin-top: 15px; font-size: 0.85rem; color: var(--color-text-muted);">
+            Nota: Funcionalidades como "Toque de Chamada", "Cancelar" e "Mutar" são parte integrante das chamadas e não necessitam de ativação separada aqui.
+        </p>
+    </div>
+</div>
+{% endblock content %}
+
+{% block scripts %}
+<script>
+    // Coloca a função no escopo global ou window para ser achada pelo AJAX
+    window.attachWebRTCToggleListeners = function() {
+        document.querySelectorAll('.webrtc-toggle').forEach(toggle => {
+            // Remove listener antigo para evitar duplicação ao recarregar via AJAX
+             const oldListener = toggle.handler; // Assume que armazenamos a referência
+             if (oldListener) {
+                 toggle.removeEventListener('change', oldListener);
+             }
+
+            // Define a função handler
+            const handler = async (event) => {
+                const checkbox = event.target;
+                const featureId = checkbox.closest('tr').dataset.featureId;
+                const accessType = checkbox.dataset.access;
+                const isEnabled = checkbox.checked;
+
+                // Desabilita temporariamente para evitar cliques múltiplos
+                checkbox.disabled = true;
+
+                try {
+                    const response = await fetch('/api/admin/webrtc/toggle', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            feature_id: featureId,
+                            access_type: accessType,
+                            enabled: isEnabled
+                        })
+                    });
+                    const result = await response.json();
+
+                    if (!result.success) {
+                        alert('Erro ao atualizar: ' + result.message);
+                        // Reverte a alteração visual em caso de erro
+                        checkbox.checked = !isEnabled;
+                    } else {
+                        // Feedback visual (opcional) - piscar a linha, etc.
+                        console.log(result.message); // Apenas log por enquanto
+                    }
+                } catch (err) {
+                    alert('Erro de conexão ao atualizar a configuração.');
+                    checkbox.checked = !isEnabled; // Reverte
+                } finally {
+                    checkbox.disabled = false; // Reabilita
+                }
+            };
+
+            // Adiciona o novo listener e guarda a referência
+            toggle.addEventListener('change', handler);
+            toggle.handler = handler; // Armazena a referência no próprio elemento
+        });
+    };
+
+    // Executa a função imediatamente ao carregar o script (seja em full load ou AJAX)
+    window.attachWebRTCToggleListeners();
+</script>
+{% endblock scripts %}

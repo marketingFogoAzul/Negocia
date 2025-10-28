@@ -235,6 +235,10 @@ const ChatModule = (function () {
     /** Lida com o envio de mensagem (User ou Admin) */
     async function handleSendMessage() {
         const messageText = chatInput.value.trim();
+        // Limpa o input IMEDIATAMENTE após pegar o valor
+        chatInput.value = '';
+        autoResizeTextarea(chatInput); // Ajusta a altura após limpar
+
         if (messageText === '' || chatInput.disabled) {
             return;
         }
@@ -256,9 +260,8 @@ const ChatModule = (function () {
             sender_name: userName // Nome do usuário logado
         });
 
-        const oldMessage = chatInput.value;
-        chatInput.value = '';
-        autoResizeTextarea(chatInput); // Ajusta altura após limpar
+        // Desabilita enquanto espera a resposta
+        // const oldMessage = messageText; // Guarda a mensagem caso precise restaurar em erro
         chatInput.disabled = true;
         sendButton.disabled = true;
 
@@ -308,11 +311,11 @@ const ChatModule = (function () {
                 sender_type: 'system',
                 text: 'Erro de conexão. Por favor, tente novamente.'
             });
-            chatInput.value = oldMessage; // Restaura msg
-            autoResizeTextarea(chatInput); // Ajusta altura
+            // chatInput.value = oldMessage; // Restaura msg em caso de erro? Opcional.
+            // autoResizeTextarea(chatInput); // Ajusta altura
         } finally {
             // Re-ativa a input se o chat não estiver bloqueado
-             updateChatUI(); // Atualiza estado dos botões/input baseado no status
+             updateChatUI(); // Atualiza estado dos botões/input baseado no status atual
              if (!chatInput.disabled) {
                  chatInput.focus();
              }
