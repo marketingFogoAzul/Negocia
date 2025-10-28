@@ -1,6 +1,4 @@
-{% extends "layout.html" %}
-
-{% block title %}Chat de Negociação{% endblock %}
+{% extends "layout_chat.html" %} {% block title %}Chat de Negociação{% endblock %}
 {% block body_class %}admin-layout{% endblock %} {% block content %}
 <div class="chat-container">
 
@@ -41,14 +39,6 @@
                     </div>
                 {% else %}
                     <div class="message-container {{ msg.sender_type }}">
-                        <div class="profile-pic">
-                            {% if msg.sender_type == 'user' %}
-                                👤
-                            {% else %}
-                                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="bot">
-                            {% endif %}
-                        </div>
-
                         <div class="message-content">
                             {% if msg.sender_type == 'admin' %}
                                 <div class="message-sender-name">{{ msg.sender_name | default('Vendedor', true) }}</div>

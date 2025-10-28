@@ -173,15 +173,6 @@ const ChatModule = (function () {
         const container = document.createElement('div');
         container.classList.add('message-container', msg.sender_type);
 
-        // Define avatar
-        let avatarContent = '';
-        if (msg.sender_type === 'user') {
-            avatarContent = '👤'; // Avatar padrão do usuário
-        } else {
-            // Bot ou Admin usam o logo
-            avatarContent = `<img src="/static/img/logo.png" alt="logo">`;
-        }
-
         // Define nome do remetente
         let senderName = '';
         if (msg.sender_type === 'admin') {
@@ -190,8 +181,8 @@ const ChatModule = (function () {
             senderName = `<div class="message-sender-name">${userName}</div>`;
         }
 
+        // HTML SEM O AVATAR
         container.innerHTML = `
-            <div class="profile-pic">${avatarContent}</div>
             <div class="message-content">
                 ${senderName}
                 <div class="message-bubble">
@@ -211,10 +202,9 @@ const ChatModule = (function () {
 
         const container = document.createElement('div');
         container.classList.add('message-container', 'bot', 'loading-bubble');
+        
+        // HTML SEM O AVATAR
         container.innerHTML = `
-            <div class="profile-pic">
-                <img src="/static/img/logo.png" alt="logo">
-            </div>
             <div class="message-content">
                 <div class="message-bubble">
                     <div class="loading-dots">

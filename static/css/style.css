@@ -154,13 +154,14 @@ a:hover {
     opacity: 1;
 }
 
-/* Botão Novo Chat */
-.sidebar-nav .btn-primary {
+/* Botão Novo Chat / Voltar */
+.sidebar-nav .btn-nav-action {
     margin: 0 10px 15px 10px; /* Margem ajustada */
     width: calc(100% - 20px); /* Ocupa largura com margens */
     padding: 10px 20px;
     font-size: 0.9rem;
 }
+
 
 /* --- HISTÓRICO DE CHATS (Sidebar Consumidor) --- */
 .chat-history-list {
@@ -254,12 +255,19 @@ a:hover {
     color: var(--color-text-primary);
 }
 
-.user-email { /* Mostra o Cargo aqui */
+/* O cargo (email antigo) agora é um link clicável */
+.user-role-link {
     font-size: 0.75rem;
     color: var(--color-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+.user-role-link:hover {
+    color: var(--color-primary-light);
+    text-decoration: underline;
 }
 
 .sidebar-footer-links a {
@@ -426,27 +434,9 @@ a:hover {
 /* --- MENSAGENS DO CHAT --- */
 .message-container {
     display: flex;
-    gap: 10px; /* Espaço menor */
-    max-width: 85%; /* Um pouco mais largas */
+    gap: 0; /* Avatar removido */
+    max-width: 100%; /* Largura total */
 }
-
-.message-container .profile-pic {
-    width: 36px; /* Menor */
-    height: 36px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    background-color: var(--color-bg-tertiary);
-    margin-top: 4px; /* Alinha com nome */
-}
-.message-container.bot .profile-pic img,
-.message-container.admin .profile-pic img {
-    padding: 4px; /* Espaçamento interno da logo */
-}
-.message-container.user .profile-pic { background-color: var(--color-primary); color: white; }
 
 .message-content { display: flex; flex-direction: column; flex: 1; }
 
@@ -463,12 +453,17 @@ a:hover {
     line-height: 1.5;
     word-wrap: break-word;
     box-shadow: 0 1px 3px var(--color-shadow); /* Sombra mais sutil */
-    max-width: fit-content; /* Ajusta largura ao conteúdo */
+    max-width: 85%; /* Largura máxima da bolha */
 }
 
 /* User */
-.message-container.user { align-self: flex-end; flex-direction: row-reverse; }
-.message-container.user .message-bubble { background-color: var(--color-primary); color: white; border-bottom-right-radius: 4px; }
+.message-container.user { align-self: flex-end; }
+.message-container.user .message-bubble { 
+    background-color: var(--color-primary); 
+    color: white; 
+    border-bottom-right-radius: 4px;
+    align-self: flex-end; /* Alinha bolha à direita */
+}
 .message-container.user .message-sender-name { text-align: right; }
 
 /* Bot/Admin */
@@ -478,6 +473,7 @@ a:hover {
     color: var(--color-text-primary);
     border: 1px solid var(--color-border);
     border-bottom-left-radius: 4px;
+    align-self: flex-start; /* Alinha bolha à esquerda */
 }
 .message-container.admin .message-sender-name { color: var(--color-warning); }
 
@@ -493,8 +489,8 @@ a:hover {
     padding: 4px 10px;
     border: 1px dashed var(--color-border); /* Borda tracejada */
     border-radius: 4px;
+    max-width: 100%;
 }
-.message-container.system .profile-pic { display: none; }
 
 /* Loading Dots */
 .loading-dots span { background-color: var(--color-text-secondary); }
@@ -674,6 +670,8 @@ body.admin-layout .main-content {
 .status-assumed      { background-color: rgba(139, 92, 246, 0.1); color: #a78bfa; border-color: #8b5cf6; } /* Roxo */
 .status-manual_override{ background-color: rgba(234, 179, 8, 0.1); color: #facc15; border-color: #eab308; } /* Amarelo */
 .status-completed    { background-color: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: var(--color-success); }
+.status-danger       { background-color: rgba(239, 68, 68, 0.1); color: var(--color-danger); border-color: var(--color-danger); } /* Adicionado para filtro */
+
 
 /* Formulários Admin */
 .admin-form {

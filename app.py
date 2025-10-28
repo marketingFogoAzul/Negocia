@@ -7,7 +7,7 @@ import google.generativeai as genai
 
 from dotenv import load_dotenv
 from flask import (
-    Flask, render_template, request, jsonify, session, redirect, url_for, flash, abort
+    Flask, render_template, request, jsonify, session, redirect, url_for, flash, abort, make_response
 )
 from flask_login import (
     LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -286,6 +286,18 @@ def get_gemini_response(user_message, chat_history=None, product_info=None):
         return "Desculpe, o serviço de IA está temporariamente indisponível."
 
     try:
+        # --- Busca Filtros de IA ---
+        all_filters = query_db("SELECT rule_type, content FROM ia_filters") or []
+        prompt_rules = []
+        blocked_words = []
+        if all_filters:
+            for f in all_filters:
+                if f['rule_type'] == 'regra_prompt':
+                    prompt_rules.append(f['content'])
+                elif f['rule_type'] == 'palavra_bloqueada':
+                    blocked_words.append(f['content'].lower())
+        
+        # --- Constrói o Contexto (System Prompt) ---
         context = """
         Você é um assistente de vendas da empresa ZIPBUM Negocia. Seja educado, profissional e
         focado em ajudar o cliente a escolher um produto e a quantidade.
@@ -293,6 +305,13 @@ def get_gemini_response(user_message, chat_history=None, product_info=None):
         Se o usuário perguntar algo fora do escopo de vendas (produtos, quantidade, preço),
         responda educadamente que você só pode ajudar com negociações.
         """
+
+        # Adiciona regras do DB
+        if prompt_rules:
+            context += "\n\nREGRAS ADICIONAIS IMPORTANTES:\n"
+            for rule in prompt_rules:
+                context += f"- {rule}\n"
+
 
         if product_info:
              # Formata melhor as infos do produto
@@ -328,7 +347,19 @@ def get_gemini_response(user_message, chat_history=None, product_info=None):
             return "Não consigo processar essa solicitação no momento. Você pode tentar reformular?"
 
 
-        return response.text.strip()
+        response_text = response.text.strip()
+
+        # Filtra palavras bloqueadas na SAÍDA
+        if blocked_words:
+            response_text_lower = response_text.lower()
+            for word in blocked_words:
+                if word in response_text_lower:
+                    # Se uma palavra bloqueada for encontrada, substitui a msg
+                    log_action(None, 'IA_FILTER_TRIGGERED', details=f"IA tentou dizer: {word}")
+                    response_text = "Desculpe, não posso fornecer informações sobre esse tópico específico. Posso ajudar com mais alguma coisa?"
+                    break # Para no primeiro bloqueio
+        
+        return response_text
 
     except Exception as e:
         print(f"Erro CRÍTICO ao chamar Gemini AI: {e}")
@@ -341,10 +372,7 @@ def get_gemini_response(user_message, chat_history=None, product_info=None):
 def login():
     if current_user.is_authenticated:
         # Se já logado, redireciona para a página apropriada
-        if current_user.role >= 1:
-            return redirect(url_for('admin_my_negotiations'))
-        else:
-            return redirect(url_for('new_chat_page'))
+        return redirect(url_for('new_chat_page'))
 
     if request.method == 'POST':
         email = request.form.get('email', '').strip()
@@ -368,11 +396,8 @@ def login():
             log_action(user, 'LOGIN')
             flash('Login realizado com sucesso!', 'success')
 
-            # Redireciona baseado no cargo
-            if user.role >= 1:
-                return redirect(url_for('admin_my_negotiations'))
-            else:
-                return redirect(url_for('new_chat_page'))
+            # Todos os usuários são redirecionados para a página principal do chat
+            return redirect(url_for('new_chat_page'))
         else:
             log_action(None, 'LOGIN_FAILED', details=f"Tentativa falha: {email}")
             flash('E-mail ou senha inválidos!', 'danger')
@@ -386,10 +411,7 @@ def login():
 def register():
     if current_user.is_authenticated:
         # Se já logado, redireciona
-        if current_user.role >= 1:
-            return redirect(url_for('admin_my_negotiations'))
-        else:
-            return redirect(url_for('new_chat_page'))
+        return redirect(url_for('new_chat_page'))
 
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -438,9 +460,19 @@ def register():
 def logout():
     log_action(current_user, 'LOGOUT')
     logout_user()
-    session.clear() # Limpa toda a sessão
-    flash("Você saiu com sucesso.", "info") # Usar info ou success
-    return redirect(url_for('login'))
+    session.clear()
+    flash("Você saiu com sucesso.", "info")
+
+    # Criar a resposta de redirecionamento
+    response = make_response(redirect(url_for('login')))
+
+    # Adicionar headers para forçar o no-cache
+    # Isso impede que o navegador use uma resposta antiga
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    
+    return response
 
 def get_recent_chats(user_id):
     """Busca os chats recentes do usuário para a sidebar."""
@@ -465,10 +497,8 @@ def get_recent_chats(user_id):
 @login_required
 def home():
     """Redireciona o usuário para o local correto."""
-    if current_user.role >= 1:
-        return redirect(url_for('admin_my_negotiations'))
-    else:
-        return redirect(url_for('new_chat_page'))
+    # Todos os usuários são redirecionados para a página principal do chat
+    return redirect(url_for('new_chat_page'))
 
 @app.route('/chat') # Rota principal do chat
 @login_required
@@ -669,6 +699,55 @@ def admin_products():
                            products=products,
                            search_query=search_query)
 
+# --- INÍCIO: NOVAS ROTAS FILTRO IA ---
+@app.route('/admin/filters')
+@login_required
+@permission_required('promote_to_junior') # Apenas MKT/TI+
+def admin_filters():
+    """Página para gerenciar filtros da IA."""
+    filters = query_db("SELECT * FROM ia_filters ORDER BY rule_type, created_at DESC") or []
+    return render_template('admin/admin_filters.html', filters=filters)
+
+@app.route('/api/admin/filters', methods=['POST'])
+@login_required
+@permission_required('promote_to_junior')
+def api_add_filter():
+    data = request.json
+    content = data.get('content','').strip()
+    rule_type = data.get('rule_type')
+
+    if not content or not rule_type:
+        return jsonify({'success': False, 'message': 'Conteúdo e Tipo são obrigatórios.'}), 400
+    if rule_type not in ['palavra_bloqueada', 'regra_prompt']:
+        return jsonify({'success': False, 'message': 'Tipo de regra inválido.'}), 400
+    
+    success = execute_db(
+        "INSERT INTO ia_filters (rule_type, content, created_by_user_id) VALUES (%s, %s, %s)",
+        (rule_type, content, current_user.id)
+    )
+    if success:
+        log_action(current_user, 'IA_FILTER_ADD', details=f"Tipo: {rule_type}, Conteúdo: {content}")
+        return jsonify({'success': True, 'message': 'Regra adicionada!'})
+    else:
+        return jsonify({'success': False, 'message': 'Erro ao salvar no banco.'}), 500
+
+@app.route('/api/admin/filters/<int:filter_id>', methods=['DELETE'])
+@login_required
+@permission_required('promote_to_junior')
+def api_delete_filter(filter_id):
+    filter_rule = query_db("SELECT content, rule_type FROM ia_filters WHERE id = %s", (filter_id,), one=True)
+    if not filter_rule:
+        return jsonify({'success': False, 'message': 'Regra não encontrada.'}), 404
+    
+    success = execute_db("DELETE FROM ia_filters WHERE id = %s", (filter_id,))
+    if success:
+        log_action(current_user, 'IA_FILTER_REMOVE', details=f"Tipo: {filter_rule['rule_type']}, Conteúdo: {filter_rule['content']}")
+        return jsonify({'success': True, 'message': 'Regra removida.'})
+    else:
+        return jsonify({'success': False, 'message': 'Erro ao remover.'}), 500
+# --- FIM: NOVAS ROTAS FILTRO IA ---
+
+
 @app.route('/admin/negotiations')
 @login_required
 @permission_required('view_all_negotiations') # Apenas cargos 2+
@@ -868,7 +947,7 @@ def api_login():
         session.pop('chat_state', None)
         log_action(user, 'LOGIN')
 
-        redirect_url = url_for('admin_my_negotiations') if user.role >= 1 else url_for('new_chat_page')
+        redirect_url = url_for('new_chat_page') # Todos vão para a home/novo chat
         return jsonify({
             'success': True,
             'message': 'Login bem-sucedido!',

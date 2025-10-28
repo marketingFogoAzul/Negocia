@@ -66,6 +66,15 @@ CREATE TABLE audit_log (
     target_user_id INT REFERENCES users(id) ON DELETE SET NULL
 );
 
+-- 7. Tabela de Filtros da IA (NOVA)
+CREATE TABLE ia_filters (
+    id SERIAL PRIMARY KEY,
+    rule_type VARCHAR(50) NOT NULL, -- 'palavra_bloqueada', 'regra_prompt'
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_by_user_id INT REFERENCES users(id)
+);
+
 -- Dados Iniciais (Exemplos)
 INSERT INTO products (code, name, price, stock, colors) VALUES
 ('ZB-001', 'Cadeira Gamer Pro', 1800.00, 50, ARRAY['Preto', 'Vermelho', 'Azul']),

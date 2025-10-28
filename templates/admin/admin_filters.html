@@ -1,0 +1,137 @@
+{% extends "layout_admin.html" %}
+{% block title %}Filtrar IA{% endblock %}
+{% block body_class %}admin-layout{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>Filtrar IA (Gemini)</h1>
+    <p>Adicione regras e palavras bloqueadas para o assistente de IA.</p>
+</div>
+
+<div class="admin-content">
+    <div class="admin-section">
+        <h2>Adicionar Nova Regra</h2>
+        <form class="admin-form" id="add-filter-form">
+            <div class="form-group" style="grid-column: 1 / 3;">
+                <label for="content">Conteúdo da Regra</label>
+                <input type="text" id="content" placeholder="Ex: 'concorrente' ou 'Não ofereça mais de 10%'" required>
+            </div>
+            <div class="form-group">
+                <label for="rule_type">Tipo de Regra</label>
+                <select id="rule_type">
+                    <option value="regra_prompt">Regra de Prompt (Instrução)</option>
+                    <option value="palavra_bloqueada">Palavra Bloqueada (IA não pode dizer)</option>
+                </select>
+            </div>
+            <p class="error-message full-width"></p>
+            <button type="submit" class="btn btn-primary">Adicionar Regra</button>
+        </form>
+    </div>
+
+    <div class="admin-section">
+        <h2>Regras Atuais</h2>
+        {% if filters %}
+        <table class="admin-table" id="filters-table">
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Conteúdo</th>
+                    <th>Adicionado em</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for filter in filters %}
+                <tr data-id="{{ filter.id }}">
+                    <td>
+                        <span class="status-{{ 'assumed' if filter.rule_type == 'regra_prompt' else 'danger' }}">
+                            {{ 'Regra' if filter.rule_type == 'regra_prompt' else 'Bloqueio' }}
+                        </span>
+                    </td>
+                    <td>{{ filter.content }}</td>
+                    <td>{{ filter.created_at.strftime('%d/%m/%Y') }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="deleteFilter({{ filter.id }}, this)">
+                            Remover
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <p>Nenhuma regra de filtro definida.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // --- Lógica para Adicionar Filtro ---
+    const addForm = document.getElementById('add-filter-form');
+    addForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const button = addForm.querySelector('button');
+        const errorMsg = addForm.querySelector('.error-message');
+        button.disabled = true;
+        button.textContent = 'Salvando...';
+        errorMsg.textContent = '';
+        
+        const data = {
+            content: document.getElementById('content').value,
+            rule_type: document.getElementById('rule_type').value,
+        };
+
+        try {
+            const response = await fetch('/api/admin/filters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(result.message);
+                window.location.reload(); 
+            } else {
+                errorMsg.textContent = result.message;
+            }
+        } catch (err) {
+            errorMsg.textContent = 'Erro de conexão.';
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Adicionar Regra';
+        }
+    });
+
+    // --- Lógica para Remover Filtro ---
+    async function deleteFilter(filterId, element) {
+        if (!confirm('Tem certeza que deseja remover esta regra?')) {
+            return;
+        }
+        element.disabled = true;
+        element.textContent = '...';
+
+        try {
+            const response = await fetch(`/api/admin/filters/${filterId}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(result.message);
+                element.closest('tr').remove(); // Remove a linha
+            } else {
+                alert('Erro: ' + result.message);
+                element.disabled = false;
+                element.textContent = 'Remover';
+            }
+        } catch (err) {
+            alert('Erro de conexão.');
+            element.disabled = false;
+            element.textContent = 'Remover';
+        }
+    }
+</script>
+{% endblock %}
