@@ -1,0 +1,155 @@
+{% extends "layout.html" %}
+{% block title %}Meus Atendimentos{% endblock %}
+{% block body_class %}admin-layout{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>Meus Atendimentos</h1>
+    <p>Chats que estão sob sua responsabilidade.</p>
+</div>
+
+<div class="admin-content">
+
+    <div class="admin-section">
+        <h2><i class="fas fa-inbox"></i> Fila (Disponíveis para Assumir)</h2>
+        {% set available_chats = get_pending_reviews() %} {% set available_chats = query_db("SELECT c.id, u.name as user_name, c.created_at, p.name as product_name FROM chats c JOIN users u ON c.user_id = u.id LEFT JOIN products p ON (c.proposal_data->>'product_id')::int = p.id WHERE c.status = 'pending_review' ORDER BY c.created_at ASC") %}
+
+        {% if available_chats %}
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>ID do Chat</th>
+                    <th>Usuário</th>
+                    <th>Produto</th>
+                    <th>Data Solicitação</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for review in available_chats %}
+                <tr id="review-{{ review.id }}">
+                    <td>#{{ review.id }}</td>
+                    <td>{{ review.user_name }}</td>
+                    <td>{{ review.product_name | default('N/A', true) }}</td>
+                    <td style="white-space: nowrap;">{{ review.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td>
+                        <a href="{{ url_for('existing_chat_page', chat_id=review.id) }}" class="btn btn-sm btn-gray">Ver</a>
+                        <form action="{{ url_for('api_assume_negotiation', chat_id=review.id) }}" method="POST" style="display: inline;" onsubmit="return handleAssume(event)">
+                            <button type="submit" class="btn btn-sm btn-warning">Assumir</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>Nenhuma revisão pendente. Bom trabalho!</p>
+        {% endif %}
+    </div>
+
+    <div class="admin-section">
+        <h2><i class="fas fa-play-circle"></i> Em Andamento (Assumidos por mim)</h2>
+        {% if pending_chats %}
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>ID do Chat</th>
+                    <th>Usuário</th>
+                    <th>Produto</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for chat in pending_chats %}
+                <tr>
+                    <td>#{{ chat.id }}</td>
+                    <td>{{ chat.user_name }}</td>
+                    <td>{{ chat.product_name | default('N/A', true) }}</td>
+                    <td>
+                        <span class="status-{{chat.status}}">
+                            {{ 'Manual' if chat.status == 'manual_override' else 'Assumido' }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-comment"></i> Responder
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>Você não possui atendimentos em andamento.</p>
+        {% endif %}
+    </div>
+
+    <div class="admin-section">
+        <h2><i class="fas fa-check-circle"></i> Encerrados (por mim)</h2>
+        {% if completed_chats %}
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>ID do Chat</th>
+                    <th>Usuário</th>
+                    <th>Produto</th>
+                    <th>Data</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for chat in completed_chats %}
+                <tr>
+                    <td>#{{ chat.id }}</td>
+                    <td>{{ chat.user_name }}</td>
+                    <td>{{ chat.product_name | default('N/A', 'true') }}</td>
+                    <td style="white-space: nowrap;">{{ chat.created_at.strftime('%d/%m/%Y') }}</td>
+                    <td>
+                        <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}" class="btn btn-sm btn-gray">
+                            Ver Histórico
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>Você ainda não encerrou atendimentos.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Script para o botão "Assumir"
+    async function handleAssume(event) {
+        event.preventDefault();
+        const form = event.target;
+        const button = form.querySelector('button');
+        button.disabled = true;
+        button.textContent = '...';
+
+        try {
+            const response = await fetch(form.action, { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(result.message);
+                // Redireciona para a página do chat assumido
+                window.location.href = `/chat/${form.action.split('/').pop()}`;
+            } else {
+                alert('Erro: ' + result.message);
+                button.disabled = false;
+                button.textContent = 'Assumir';
+            }
+        } catch (err) {
+            alert('Erro de conexão.');
+            button.disabled = false;
+            button.textContent = 'Assumir';
+        }
+        return false;
+    }
+</script>
+{% endblock %}

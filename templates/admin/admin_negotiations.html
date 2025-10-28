@@ -1,123 +1,60 @@
 {% extends "layout.html" %}
-{% block title %}Dashboard Admin{% endblock %}
+{% block title %}Histórico de Conversas{% endblock %}
+{% block body_class %}admin-layout{% endblock %}
 
 {% block content %}
 <div class="admin-header">
-    <h1>Dashboard</h1>
-    <p>Visão geral do sistema.</p>
+    <h1>Histórico de Conversas</h1>
+    <p>Visualize todos os chats do sistema (Cargos 2+).</p>
 </div>
 
 <div class="admin-content">
-    <div class="dashboard-stats">
-        <div class="stat-card">
-            <div class="value">{{ stats.pending_reviews | default('0', true) }}</div>
-            <div class="label">Revisões Pendentes</div>
-        </div>
-        <div class="stat-card">
-            <div class="value">{{ stats.total_negotiations | default('0', true) }}</div>
-            <div class="label">Total de Negociações</div>
-        </div>
-        <div class="stat-card">
-            <div class="value">{{ stats.total_users | default('0', true) }}</div>
-            <div class="label">Usuários Totais</div>
-        </div>
-        <div class="stat-card">
-            <div class="value">{{ stats.total_products | default('0', true) }}</div>
-            <div class="label">Produtos Cadastrados</div>
-        </div>
+
+    <div class="admin-section">
+        <form method="GET" action="{{ url_for('admin_negotiations') }}" class="search-form">
+            <div class="form-group" style="grid-column: 1 / 3;">
+                <label for="q">Buscar (Cliente, Vendedor ou ID do Chat)</label>
+                <input type="search" id="q" name="q" value="{{ search_query | default('', true) }}" placeholder="Digite o termo...">
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
+        </form>
     </div>
 
     <div class="admin-section">
-        <h2>Status do Sistema</h2>
-        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-            <div class="system-status {{ 'online' if gemini_status == 'online' else 'offline' }}">
-                <span class="status-dot {{ 'online' if gemini_status == 'online' else 'offline' }}"></span>
-                Gemini AI: {{ gemini_status | upper }}
-            </div>
-            <div class="system-status online">
-                <span class="status-dot online"></span>
-                Banco de Dados: ONLINE
-            </div>
-            <div class="system-status online">
-                <span class="status-dot online"></span>
-                Aplicação: ONLINE
-            </div>
-        </div>
-    </div>
-
-    <div class="admin-section">
-        <h2>Revisões Pendentes (Últimas 5)</h2>
-        
-        {% if reviews is not none and reviews %}
+        {% if negotiations %}
         <table class="admin-table">
             <thead>
                 <tr>
-                    <th>ID do Chat</th>
-                    <th>Usuário</th>
+                    <th>ID Chat</th>
+                    <th>Cliente</th>
+                    <th>Produto</th>
+                    <th>Vendedor</th>
+                    <th>Status</th>
                     <th>Data</th>
-                    <th>Ações</th>
+                    <th>Ação</th>
                 </tr>
             </thead>
             <tbody>
-                {% for review in reviews %}
-                <tr id="review-{{ review.id }}">
-                    <td>#{{ review.id }}</td>
-                    <td>{{ review.user_name }}</td>
-                    <td>{{ review.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                {% for chat in negotiations %}
+                <tr>
+                    <td>#{{ chat.id }}</td>
+                    <td>{{ chat.user_name }}<br><small>{{ chat.user_email }}</small></td>
+                    <td>{{ chat.product_name | default('N/A') }}</td>
+                    <td>{{ chat.assigned_admin | default('N/A') }}</td>
+                    <td><span class="status-{{chat.status}}">{{ chat.status }}</span></td>
+                    <td style="white-space: nowrap;">{{ chat.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
                     <td>
-                        <a href="{{ url_for('existing_chat_page', chat_id=review.id) }}" class="btn btn-sm btn-primary">Ver Chat</a>
-                        
-                        {% if current_user.can('assume_negotiation') %}
-                        <form action="{{ url_for('api_assume_negotiation', chat_id=review.id) }}" method="POST" style="display: inline;" onsubmit="return handleAssume(event)">
-                            <button type="submit" class="btn btn-sm btn-warning">Assumir</button>
-                        </form>
-                        {% endif %}
+                        <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}" class="btn btn-sm btn-gray">
+                            Ver Histórico
+                        </a>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% else %}
-        <p>Nenhuma revisão pendente. Bom trabalho!</p>
+        <p>Nenhuma negociação encontrada com esse critério.</p>
         {% endif %}
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    async function handleAssume(event) {
-        event.preventDefault();
-        const form = event.target;
-        const button = form.querySelector('button');
-        button.disabled = true;
-        button.textContent = '...';
-
-        try {
-            const response = await fetch(form.action, { 
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-            const result = await response.json();
-            
-            if (result.success) {
-                alert(result.message);
-                // Remove a linha da tabela ou atualiza o status
-                form.closest('tr').style.opacity = '0.5';
-                form.remove(); // Remove o formulário
-            } else {
-                alert('Erro: ' + result.message);
-                button.disabled = false;
-                button.textContent = 'Assumir';
-            }
-        } catch (err) {
-            alert('Erro de conexão.');
-            button.disabled = false;
-            button.textContent = 'Assumir';
-        }
-        return false;
-    }
-</script>
 {% endblock %}

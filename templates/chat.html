@@ -1,8 +1,7 @@
 {% extends "layout.html" %}
 
 {% block title %}Chat de Negociação{% endblock %}
-
-{% block content %}
+{% block body_class %}admin-layout{% endblock %} {% block content %}
 <div class="chat-container">
     
     <div class="chat-header" id="chat-header" {% if not chat_id %}class="hidden"{% endif %}>
@@ -23,31 +22,18 @@
             </span>
         </div>
         <div class="chat-actions">
-            {% if current_user.role >= 1 %}
-                <button class="btn btn-sm btn-warning hidden" id="disable-ia-button">
-                    Desativar IA
-                </button>
-                <button class="btn btn-sm btn-danger hidden" id="close-chat-button">
-                    Encerrar Negociação
-                </button>
-            {% endif %}
+            <button class="btn btn-sm btn-warning hidden" id="disable-ia-button">
+                Desativar IA
+            </button>
+            <button class="btn btn-sm btn-danger hidden" id="close-chat-button">
+                Encerrar Negociação
+            </button>
         </div>
     </div>
     
     <div class="chat-window" id="chat-window">
         
-        {% if not chat_history %}
-            <div class="message-container bot">
-                <div class="profile-pic">
-                    <img src="/static/img/logo.png" alt="bot" style="width: 100%; height: 100%; border-radius: 50%;">
-                </div>
-                <div class="message-content">
-                    <div class="message-bubble">
-                        Olá {{ current_user.name }}, Qual produto você deseja verificar negociação?
-                    </div>
-                </div>
-            </div>
-        {% else %}
+        {% if chat_history %}
             {% for msg in chat_history %}
                 {% if msg.sender_type == 'system' %}
                     <div class="message-container system">
@@ -55,19 +41,19 @@
                     </div>
                 {% else %}
                     <div class="message-container {{ msg.sender_type }}">
-                        {% if msg.sender_type == 'user' %}
-                            <div class="profile-pic">👤</div>
-                        {% else %}
-                            <div class="profile-pic">
+                        <div class="profile-pic">
+                            {% if msg.sender_type == 'user' %}
+                                👤
+                            {% else %}
                                 <img src="/static/img/logo.png" alt="bot" style="width: 100%; height: 100%; border-radius: 50%;">
-                            </div>
-                        {% endif %}
+                            {% endif %}
+                        </div>
                         
                         <div class="message-content">
                             {% if msg.sender_type == 'admin' %}
                                 <div class="message-sender-name">{{ msg.sender_name | default('Vendedor', true) }}</div>
                             {% elif msg.sender_type == 'user' %}
-                                <div class="message-sender-name">{{ chat_data.user_name }}</div>
+                                <div class="message-sender-name">{{ chat_data.user_name or current_user.name }}</div>
                             {% endif %}
                             
                             <div class="message-bubble">
@@ -84,13 +70,15 @@
         
         <div class="hidden" id="review-button-container">
             <button id="review-button" class="btn btn-warning">
-                Solicitar Revisão da Proposta
+                <i class="fas fa-gavel"></i> Solicitar Revisão da Proposta
             </button>
         </div>
         
         <div class="chat-input-row" id="chat-input-row">
             <textarea id="chat-input" placeholder="Digite sua mensagem..." rows="1"></textarea>
-            <button id="send-button" class="btn btn-primary">Enviar</button>
+            <button id="send-button" class="btn btn-primary">
+                <i class="fas fa-paper-plane"></i>
+            </button>
         </div>
     </div>
 
@@ -100,14 +88,16 @@
 {% block scripts %}
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
     <script>
-        // Passa os dados do Python para o JavaScript
+        // Passa os dados do Python (Flask) para o JavaScript (ChatModule)
         ChatModule.init({
             chatId: {{ chat_id | tojson }},
             status: "{{ chat_data.status | default('active', true) }}",
-            userName: "{{ current_user.name }}"
+            reviewRequested: {{ chat_data.review_requested | default(false) | tojson }},
+            userName: "{{ current_user.name }}",
+            userRole: {{ current_user.role | default(0) }}
         });
 
-        // Auto-resize do textarea
+        // Auto-resize do textarea (do layout.html antigo)
         const chatInput = document.getElementById('chat-input');
         if (chatInput) {
             chatInput.addEventListener('input', function() {

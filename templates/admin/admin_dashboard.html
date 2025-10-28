@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block body_class %}admin-layout{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>Dashboard</h1>
+    <p>Visão geral dos seus atendimentos e da fila.</p>
+</div>
+
+<div class="admin-content">
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <div class="value" style="color: var(--color-warning);">{{ stats.available | default('0', true) }}</div>
+            <div class="label">Atendimentos Disponíveis (Pendente)</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="value" style="color: var(--color-primary);">{{ stats.my_pending | default('0', true) }}</div>
+            <div class="label">Meus Atendimentos (Em Andamento)</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" style="color: var(--color-success);">{{ stats.my_completed | default('0', true) }}</div>
+            <div class="label">Meus Atendimentos (Encerrados)</div>
+        </div>
+    </div>
+
+    <div class="admin-section">
+        <h2>Atendimentos Disponíveis para Assumir</h2>
+        <p>A fila de atendimentos pendentes pode ser vista na página "Meus Atendimentos".</p>
+        <a href="{{ url_for('admin_my_negotiations') }}" class="btn btn-primary">
+            Ver Fila de Atendimento
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+{% block title %}Atendimentos (Geral){% endblock %}
+{% block body_class %}admin-layout{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>Atendimentos (Geral)</h1>
+    <p>Visão completa de todos atendimentos (Cargos 3, 4, 5).</p>
+</div>
+
+<div class="admin-content">
+    
+    {% if admin_data %}
+        {% for admin_id, data in admin_data.items() %}
+        <div class="admin-section">
+            <h2>
+                Atendimentos de: <strong>{{ data.name }}</strong> 
+                <span style="font-size: 1rem; color: var(--color-text-muted);">(Cargo {{ data.role }})</span>
+            </h2>
+            
+            {% if data.chats %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ID Chat</th>
+                        <th>Cliente</th>
+                        <th>Status</th>
+                        <th>Data</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for chat in data.chats %}
+                    <tr>
+                        <td>#{{ chat.id }}</td>
+                        <td>{{ chat.user_name }}</td>
+                        <td><span class="status-{{chat.status}}">{{ chat.status }}</span></td>
+                        <td style="white-space: nowrap;">{{ chat.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>
+                            <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}" class="btn btn-sm btn-gray">
+                                Ver Histórico
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>{{ data.name }} não possui atendimentos registrados.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="admin-section">
+        <p>Nenhum atendimento de admin encontrado.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

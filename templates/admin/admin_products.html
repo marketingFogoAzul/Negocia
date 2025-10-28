@@ -1,9 +1,11 @@
 {% extends "layout.html" %}
 {% block title %}Gerenciar Produtos{% endblock %}
+{% block body_class %}admin-layout{% endblock %}
 
 {% block content %}
 <div class="admin-header">
-    <h1>Gerenciar Produtos</h1>
+    <h1>Gerenciar Produtos (Itens)</h1>
+    <p>Adicione, remova ou edite produtos do sistema.</p>
 </div>
 
 <div class="admin-content">
@@ -37,12 +39,19 @@
 
     <div class="admin-section">
         <h2>Produtos Cadastrados</h2>
+        <form method="GET" action="{{ url_for('admin_products') }}" class="search-form">
+            <div class="form-group" style="grid-column: 1 / 3;">
+                <label for="q">Buscar (Nome ou Código)</label>
+                <input type="search" id="q" name="q" value="{{ search_query | default('', true) }}" placeholder="Digite o termo...">
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
+        </form>
         
-        {% if products is not none %}
+        {% if products %}
         <table class="admin-table" id="products-table">
             <thead>
                 <tr>
-                    <th>Código</th>
+                    <th>Código (SKU)</th>
                     <th>Nome</th>
                     <th>Preço</th>
                     <th>Estoque</th>
@@ -64,13 +73,13 @@
                             Remover
                         </button>
                         {% endif %}
-                    </td>
+                        </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% else %}
-            <p>Nenhum produto cadastrado ou erro ao buscar.</p>
+            <p>Nenhum produto cadastrado (ou encontrado na busca).</p>
         {% endif %}
     </div>
 </div>
@@ -106,7 +115,7 @@
 
             if (response.ok) {
                 alert(result.message);
-                window.location.reload(); // Recarrega a página para ver o novo produto
+                window.location.reload(); 
             } else {
                 errorMsg.textContent = result.message;
             }
@@ -120,7 +129,7 @@
 
     // --- Lógica para Remover Produto ---
     async function deleteProduct(productId, element) {
-        if (!confirm('Tem certeza que deseja remover este produto? Esta ação não pode ser desfeita.')) {
+        if (!confirm('Tem certeza que deseja remover este produto?')) {
             return;
         }
         
@@ -135,8 +144,7 @@
 
             if (response.ok) {
                 alert(result.message);
-                // Remove a linha da tabela
-                element.closest('tr').remove();
+                element.closest('tr').remove(); // Remove a linha
             } else {
                 alert('Erro: ' + result.message);
                 element.disabled = false;

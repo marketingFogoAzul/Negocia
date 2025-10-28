@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% block title %}Gerenciar Usuários{% endblock %}
+{% block body_class %}admin-layout{% endblock %}
 
 {% block content %}
 <div class="admin-header">
@@ -8,82 +9,81 @@
 </div>
 
 <div class="admin-content">
-    {% if dev_activated %}
-    <div class="flash info">
-        <b>Aviso:</b> O cargo de Desenvolvedor (5) já foi ativado e está oculto.
+    
+    <div class="admin-section">
+        <form method="GET" action="{{ url_for('admin_users') }}" class="search-form">
+            <div class="form-group">
+                <label for="q">Buscar (Nome, Email, ID ou Cargo)</label>
+                <input type="search" id="q" name="q" value="{{ search_query | default('', true) }}" placeholder="Digite o termo...">
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
+        </form>
     </div>
-    {% endif %}
 
-    {% if users is not none and users %}
-    <table class="admin-table" id="users-table">
-        <thead>
-            <tr>
-                <th>Nome</th>
-                <th>E-mail</th>
-                <th>Cargo Atual</th>
-                <th>Novo Cargo</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for user in users %}
-            <tr data-id="{{ user.id }}">
-                <td>{{ user.name }}</td>
-                <td>{{ user.email }}</td>
-                <td>
-                    {% if user.role == 0 %}
-                        Consumidor
-                    {% elif user.role == 1 %}
-                        Vendedor
-                    {% elif user.role == 2 %}
-                        Teste
-                    {% elif user.role == 3 %}
-                        MKT/TI
-                    {% elif user.role == 4 %}
-                        Junior
-                    {% elif user.role == 5 %}
-                        Desenvolvedor
-                    {% else %}
-                        Desconhecido
-                    {% endif %}
-                    ({{ user.role }})
-                </td>
-                <td>
-                    <select class="role-select" data-userid="{{ user.id }}">
-                        {% for i in range(current_user.role) %}
-                            <option value="{{ i }}" {{ 'selected' if i == user.role else '' }}>
-                                {% if i == 0 %}
-                                    Consumidor
-                                {% elif i == 1 %}
-                                    Vendedor
-                                {% elif i == 2 %}
-                                    Teste
-                                {% elif i == 3 %}
-                                    MKT/TI
-                                {% elif i == 4 %}
-                                    Junior
-                                {% else %}
-                                    Cargo {{ i }}
-                                {% endif %}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </td>
-                <td class="actions">
-                    <button class="btn btn-sm btn-primary" onclick="promoteUser({{ user.id }})">
-                        Salvar Cargo
-                    </button>
-                    <a href="{{ url_for('admin_negotiations', q=user.email) }}" class="btn btn-sm btn-gray">
-                        Ver Chamados
-                    </a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-         <p>Nenhum usuário para gerenciar (ou todos têm cargo igual/superior ao seu).</p>
-    {% endif %}
+    <div class="admin-section">
+        {% if dev_activated %}
+        <div class="flash info" style="background-color: var(--color-warning); margin-bottom: 20px;">
+            <b>Aviso:</b> O cargo de Desenvolvedor (5) já foi ativado e está oculto.
+        </div>
+        {% endif %}
+
+        {% if users %}
+        <table class="admin-table" id="users-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome</th>
+                    <th>E-mail</th>
+                    <th>Cargo Atual</th>
+                    <th>Novo Cargo</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr data-id="{{ user.id }}">
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.name }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        {% if user.role == 0 %}Consumidor
+                        {% elif user.role == 1 %}Vendedor
+                        {% elif user.role == 2 %}Teste
+                        {% elif user.role == 3 %}MKT/TI
+                        {% elif user.role == 4 %}Junior
+                        {% elif user.role == 5 %}Dev
+                        {% else %}Desconhecido
+                        {% endif %}
+                        ({{ user.role }})
+                    </td>
+                    <td>
+                        <select class="role-select" data-userid="{{ user.id }}" style="background-color: var(--color-bg-tertiary); color: white; padding: 5px; border-radius: 5px;">
+                            {% for i in range(current_user.role) %}
+                                <option value="{{ i }}" {{ 'selected' if i == user.role else '' }}>
+                                    {% if i == 0 %}Consumidor
+                                    {% elif i == 1 %}Vendedor
+                                    {% elif i == 2 %}Teste
+                                    {% elif i == 3 %}MKT/TI
+                                    {% elif i == 4 %}Junior
+                                    {% else %}Cargo {{ i }}
+                                    {% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td class="actions">
+                        <button class="btn btn-sm btn-primary" onclick="promoteUser({{ user.id }})">
+                            Salvar
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <p>Nenhum usuário encontrado com esse critério.</p>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}
 
@@ -92,7 +92,7 @@
     async function promoteUser(userId) {
         const row = document.querySelector(`tr[data-id="${userId}"]`);
         const select = row.querySelector('.role-select');
-        const button = row.querySelector('button');
+        const button = row.querySelector('.btn-primary');
         const newRole = select.value;
         
         button.disabled = true;
@@ -107,23 +107,13 @@
             const result = await response.json();
             alert(result.message);
             if (response.ok) {
-                // Atualiza o texto do cargo
-                const roleText = row.querySelector('td:nth-child(3)');
-                const roleNames = {
-                    '0': 'Consumidor',
-                    '1': 'Vendedor', 
-                    '2': 'Teste',
-                    '3': 'MKT/TI',
-                    '4': 'Junior',
-                    '5': 'Desenvolvedor'
-                };
-                roleText.textContent = `${roleNames[newRole]} (${newRole})`;
+                window.location.reload(); // Recarrega para refletir a mudança
             }
         } catch (err) {
             alert('Erro de conexão.');
         } finally {
             button.disabled = false;
-            button.textContent = 'Salvar Cargo';
+            button.textContent = 'Salvar';
         }
     }
 </script>

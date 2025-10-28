@@ -10,7 +10,8 @@ const ChatModule = (function () {
     // Estado do Chat
     let currentChatId = null;
     let chatStatus = 'active';
-    let userProfilePic = 'default_user.png';
+    let reviewRequested = false; // CORREÇÃO: Flag para "botão já clicado"
+    let userRole = 0;
     let userName = 'Usuário';
 
     /**
@@ -27,12 +28,13 @@ const ChatModule = (function () {
         disableIaButton = document.getElementById('disable-ia-button');
         chatHeader = document.getElementById('chat-header');
         chatStatusText = document.getElementById('chat-status');
-        inputArea = document.getElementById('chat-input-row');
+        inputArea = document.getElementById('input-area');
         
         // Configura o estado
         currentChatId = config.chatId || null;
         chatStatus = config.status || 'active';
-        userProfilePic = config.userPic || 'default_user.png';
+        reviewRequested = config.reviewRequested || false; // Pega do backend
+        userRole = config.userRole || 0;
         userName = config.userName || 'Usuário';
 
         // Adiciona os Event Listeners
@@ -65,20 +67,23 @@ const ChatModule = (function () {
      * Atualiza a UI baseada no status do chat
      */
     function updateChatUI() {
-        const isAdmin = document.body.dataset.isAdmin === 'true';
-        const userRole = parseInt(document.body.dataset.userRole) || 0;
         
-        // Esconde/mostra botões baseado no status e permissões
+        // --- Lógica do Botão de Revisão (Usuário) ---
         if (reviewButtonContainer) {
-            if (chatStatus === 'active' && userRole === 0) {
+            // CORREÇÃO: Mostra se o chat está ativo, o usuário é consumidor E a revisão NUNCA foi pedida
+            if (chatStatus === 'active' && userRole === 0 && !reviewRequested) {
                 reviewButtonContainer.classList.remove('hidden');
             } else {
                 reviewButtonContainer.classList.add('hidden');
             }
         }
         
+        // --- Lógica dos Botões de Admin (Vendedor) ---
+        // CORREÇÃO: Só mostra se o user for admin E o chat estiver 'assumido' ou 'manual'
+        const showAdminButtons = userRole >= 1 && (chatStatus === 'assumed' || chatStatus === 'manual_override');
+
         if (disableIaButton) {
-            if ((chatStatus === 'assumed' || chatStatus === 'active') && userRole >= 1) {
+            if (showAdminButtons) {
                 disableIaButton.classList.remove('hidden');
                 disableIaButton.textContent = chatStatus === 'manual_override' ? 'IA Desativada' : 'Desativar IA';
                 disableIaButton.disabled = chatStatus === 'manual_override';
@@ -88,28 +93,42 @@ const ChatModule = (function () {
         }
         
         if (closeButton) {
+            // Mostra se for admin e o chat não estiver completo
             if (userRole >= 1 && chatStatus !== 'completed') {
+                 // Vendedor (1) só pode fechar se o chat for dele (verificação no backend)
+                 // Admin (2+) pode fechar qualquer um
                 closeButton.classList.remove('hidden');
             } else {
                 closeButton.classList.add('hidden');
             }
         }
         
-        // Atualiza placeholder e status
+        // --- Lógica da Barra de Digitação ---
         if (chatInput) {
+            let placeholder = 'Digite sua mensagem...';
+            let disabled = false;
+
             if (chatStatus === 'completed') {
-                chatInput.disabled = true;
-                chatInput.placeholder = 'Esta negociação foi encerrada.';
-            } else if (chatStatus === 'pending_review' || chatStatus === 'assumed' || chatStatus === 'manual_override') {
-                chatInput.disabled = false;
-                chatInput.placeholder = 'Aguardando resposta do vendedor...';
-            } else {
-                chatInput.disabled = false;
-                chatInput.placeholder = 'Digite sua mensagem...';
+                placeholder = 'Esta negociação foi encerrada.';
+                disabled = true;
+            } else if (chatStatus === 'pending_review' && userRole === 0) {
+                // Usuário não pode digitar enquanto aguarda revisão
+                placeholder = 'Aguardando resposta do vendedor...';
+                disabled = true;
+            } else if (chatStatus === 'active' || chatStatus === 'assumed' || chatStatus === 'manual_override') {
+                 placeholder = 'Digite sua mensagem...';
+                 disabled = false;
+            } else if (chatStatus === 'pending_review' && userRole >= 1) {
+                placeholder = 'Assuma este chat para responder...';
+                disabled = false; // Admin pode digitar para assumir
             }
+            
+            chatInput.disabled = disabled;
+            chatInput.placeholder = placeholder;
+            sendButton.disabled = disabled;
         }
         
-        // Atualiza texto do status
+        // --- Texto do Status ---
         if (chatStatusText) {
             const statusTexts = {
                 'active': 'Negociação em andamento',
@@ -129,7 +148,7 @@ const ChatModule = (function () {
         if (!chatWindow) return;
         removeLoadingBubble();
 
-        // Mensagens do sistema
+        // Mensagens do sistema (centralizadas)
         if (msg.sender_type === 'system') {
             const systemDiv = document.createElement('div');
             systemDiv.classList.add('message-container', 'system');
@@ -145,8 +164,9 @@ const ChatModule = (function () {
         // Define avatar
         let avatarContent = '';
         if (msg.sender_type === 'user') {
-            avatarContent = '👤';
+            avatarContent = '👤'; // Avatar padrão do usuário
         } else {
+            // Bot ou Admin usam o logo
             avatarContent = '<img src="/static/img/logo.png" alt="bot" style="width: 100%; height: 100%; border-radius: 50%;">';
         }
 
@@ -157,6 +177,7 @@ const ChatModule = (function () {
         } else if (msg.sender_type === 'user') {
             senderName = `<div class="message-sender-name">${userName}</div>`;
         }
+        // (Bot não tem nome)
 
         container.innerHTML = `
             <div class="profile-pic">${avatarContent}</div>
@@ -172,9 +193,7 @@ const ChatModule = (function () {
         scrollToBottom();
     }
 
-    /**
-     * Mostra o "digitando..." do bot
-     */
+    /** Mostra o "digitando..." do bot */
     function showLoadingBubble() {
         removeLoadingBubble();
         const container = document.createElement('div');
@@ -210,14 +229,15 @@ const ChatModule = (function () {
         }
     }
 
-    /** Lida com o envio de mensagem */
+    /** Lida com o envio de mensagem (User ou Admin) */
     async function handleSendMessage() {
         const messageText = chatInput.value.trim();
-        if (messageText === '' || chatStatus === 'completed') {
+        if (messageText === '' || chatInput.disabled) {
             return;
         }
 
-        const isAdmin = document.body.dataset.isAdmin === 'true';
+        // Define o endpoint (Admin vs User)
+        const isAdmin = userRole >= 1;
         const url = isAdmin 
             ? `/api/chat/admin_message/${currentChatId}`
             : '/api/chat/user_message';
@@ -231,7 +251,7 @@ const ChatModule = (function () {
         addMessageToWindow({
             sender_type: isAdmin ? 'admin' : 'user',
             text: messageText,
-            sender_name: isAdmin ? document.body.dataset.userName : userName
+            sender_name: isAdmin ? userName : userName // Usa o nome do user logado
         });
 
         const oldMessage = chatInput.value;
@@ -261,16 +281,20 @@ const ChatModule = (function () {
             // Atualiza o ID do chat se for a primeira mensagem
             if (data.chat_id && !currentChatId) {
                 currentChatId = data.chat_id;
-                if (chatHeader) chatHeader.classList.remove('hidden');
+                if (chatHeader) {
+                    chatHeader.classList.remove('hidden');
+                    document.getElementById('chat-header-id').textContent = currentChatId;
+                }
+                // Atualiza a URL sem recarregar
                 window.history.pushState({}, '', `/chat/${currentChatId}`);
             }
 
-            // Adiciona a resposta
+            // Adiciona a resposta (do bot ou do sistema)
             if (data.sender_type) {
                 addMessageToWindow(data);
             }
             
-            // Atualiza status se necessário
+            // Atualiza status se o backend enviar um novo
             if (data.chat_status) {
                 chatStatus = data.chat_status;
                 updateChatUI();
@@ -283,17 +307,15 @@ const ChatModule = (function () {
                 sender_type: 'system', 
                 text: 'Erro de conexão. Por favor, tente novamente.' 
             });
-            chatInput.value = oldMessage;
+            chatInput.value = oldMessage; // Restaura msg
         } finally {
-            if (chatStatus !== 'completed') {
-                chatInput.disabled = false;
-                sendButton.disabled = false;
-                chatInput.focus();
-            }
+            // Re-ativa a input se o chat não estiver bloqueado
+            updateChatUI();
+            chatInput.focus();
         }
     }
 
-    /** Botão 'Solicitar Revisão' */
+    /** Botão 'Solicitar Revisão' (Usuário) */
     async function handleRequestReview() {
         if (!currentChatId) return;
 
@@ -310,27 +332,28 @@ const ChatModule = (function () {
                 throw new Error(data.message);
             }
 
-            // Adiciona mensagem de confirmação e atualiza UI
+            // Adiciona mensagem de confirmação do sistema
             addMessageToWindow({
                 sender_type: data.sender_type,
                 text: data.message
             });
             
+            // CORREÇÃO: Atualiza estado local e UI
             chatStatus = 'pending_review';
-            updateChatUI();
+            reviewRequested = true; // Marca como clicado
+            updateChatUI(); // Esconde o botão e bloqueia a input
 
         } catch (error) {
             alert('Erro: ' + error.message);
             reviewButton.disabled = false;
-            reviewButton.textContent = 'Solicitar Revisão';
+            reviewButton.textContent = 'Solicitar Revisão da Proposta';
         }
     }
 
-    /** Botão 'Desativar IA' */
+    /** Botão 'Desativar IA' (Admin) */
     async function handleDisableIa() {
         if (!currentChatId) return;
-        
-        if (!confirm('Tem certeza que deseja desativar a IA para este chat? Esta ação não pode ser desfeita.')) {
+        if (!confirm('Tem certeza que deseja desativar a IA? O atendimento será 100% manual.')) {
             return;
         }
 
@@ -347,7 +370,6 @@ const ChatModule = (function () {
                 throw new Error(data.message);
             }
             
-            // Adiciona mensagem do sistema
             addMessageToWindow({
                 sender_type: data.sender_type,
                 text: data.message
@@ -358,16 +380,14 @@ const ChatModule = (function () {
 
         } catch (error) {
             alert('Erro: ' + error.message);
-            disableIaButton.disabled = false;
-            disableIaButton.textContent = 'Desativar IA';
+            updateChatUI(); // Re-ativa o botão se der erro
         }
     }
 
-    /** Botão 'Encerrar Negociação' */
+   /** Botão 'Encerrar Negociação' (Admin) */
     async function handleCloseChat() {
         if (!currentChatId) return;
-        
-        if (!confirm('Tem certeza que deseja encerrar esta negociação? Esta ação não pode ser desfeita.')) {
+        if (!confirm('Tem certeza que deseja ENCERRAR esta negociação? Esta ação não pode ser desfeita.')) {
             return;
         }
 
@@ -384,16 +404,16 @@ const ChatModule = (function () {
                 throw new Error(data.message);
             }
             
-            // Adiciona mensagem do sistema
             addMessageToWindow({
                 sender_type: data.sender_type,
                 text: data.message
             });
             
             chatStatus = 'completed';
-            updateChatUI();
+            updateChatUI(); // Desativa tudo
 
         } catch (error) {
+            // CORREÇÃO: Removido o 'D' que estava sobrando.
             alert('Erro: ' + error.message);
             closeButton.disabled = false;
             closeButton.textContent = 'Encerrar Negociação';
