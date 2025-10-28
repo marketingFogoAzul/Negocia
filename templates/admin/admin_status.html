@@ -13,12 +13,12 @@
     <div class="admin-section">
         <h2>Status dos Serviços</h2>
         <div style="display: flex; gap: 20px; flex-wrap: wrap; padding-top: 10px;">
-            
+
             <div class="system-status {{ 'online' if gemini_status == 'online' else 'offline' }}">
                 <span class="status-dot {{ 'online' if gemini_status == 'online' else 'offline' }}"></span>
                 Gemini AI: <strong>{{ gemini_status | upper }}</strong>
             </div>
-            
+
             <div class="system-status {{ 'online' if db_status == 'online' else 'offline' }}">
                 <span class="status-dot {{ 'online' if db_status == 'online' else 'offline' }}"></span>
                 Banco de Dados: <strong>{{ db_status | upper }}</strong>
@@ -35,5 +35,5 @@
 {% endblock content %}
 
 {% block scripts %}
-{# Nenhum script específico para esta página #}
+{# Sem scripts específicos para esta página por enquanto #}
 {% endblock scripts %}

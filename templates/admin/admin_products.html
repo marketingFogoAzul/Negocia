@@ -12,7 +12,7 @@
 <div class="admin-content">
     <div class="admin-section">
         <h2>Adicionar Novo Produto</h2>
-        <form class="admin-form" id="add-product-form"> {# JS vai lidar com este form #}
+        <form class="admin-form" id="add-product-form">
             <div class="form-group">
                 <label for="code">Código (SKU)</label>
                 <input type="text" id="code" required>
@@ -33,14 +33,14 @@
                 <label for="colors">Cores (separadas por vírgula)</label>
                 <input type="text" id="colors" placeholder="Preto, Vermelho, Azul">
             </div>
-            <p class="error-message full-width"></p>
+            <p class="error-message full-width" id="add-product-error"></p> {# Adicionado ID #}
             <button type="submit" class="btn btn-primary">Adicionar Produto</button>
         </form>
     </div>
 
     <div class="admin-section">
         <h2>Produtos Cadastrados</h2>
-        {# Formulário de busca NÃO usa AJAX #}
+        {# Formulário de busca tratado via JS #}
         <form method="GET" action="{{ url_for('admin_products') }}" class="search-form">
             <div class="form-group" style="grid-column: 1 / 3;">
                 <label for="q">Buscar (Nome ou Código)</label>
@@ -48,7 +48,7 @@
             </div>
             <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
         </form>
-        
+
         {% if products %}
         <table class="admin-table" id="products-table">
             <thead>
@@ -71,12 +71,11 @@
                     <td>{{ product.colors | join(', ') if product.colors else 'N/A' }}</td>
                     <td>
                         {% if current_user.can('remove_product') %}
-                        {# Usa JS inline #}
                         <button class="btn btn-sm btn-danger" onclick="deleteProduct({{ product.id }}, this)">
                             Remover
                         </button>
                         {% endif %}
-                    </td>
+                        </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -90,19 +89,21 @@
 
 {% block scripts %}
 <script>
-    window.setupProductForms = function() {
-        // --- Lógica para Adicionar Produto ---
+    // Usa IIFE para escopo local e executa imediatamente
+    (function() {
         const addForm = document.getElementById('add-product-form');
-        if (addForm && !addForm.dataset.initialized) {
-            addForm.dataset.initialized = 'true';
+        const errorMsgElement = document.getElementById('add-product-error'); // Usa ID
+
+        if (addForm && errorMsgElement) {
             addForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const button = addForm.querySelector('button');
-                const errorMsg = addForm.querySelector('.error-message');
+                const button = addForm.querySelector('button[type="submit"]');
+                 if (!button) return;
+
                 button.disabled = true;
                 button.textContent = 'Salvando...';
-                errorMsg.textContent = '';
-                
+                errorMsgElement.textContent = ''; // Limpa erro
+
                 const data = {
                     code: document.getElementById('code').value,
                     name: document.getElementById('name').value,
@@ -120,59 +121,68 @@
                     const result = await response.json();
 
                     if (response.ok) {
-                        alert(result.message);
-                         // Recarrega via AJAX
-                        if (window.loadContent) {
-                            window.loadContent(window.location.pathname + window.location.search, false);
-                        } else {
-                            window.location.reload(); // Fallback
-                        }
+                        alert(result.message || 'Produto adicionado!');
+                         // Recarrega o conteúdo via AJAX
+                         if (typeof loadContent === 'function') {
+                             loadContent(window.location.pathname + window.location.search, false);
+                         } else {
+                             window.location.reload();
+                         }
                     } else {
-                        errorMsg.textContent = result.message;
+                        errorMsgElement.textContent = result.message || 'Erro desconhecido.';
+                         button.disabled = false; // Reabilita em caso de erro
+                         button.textContent = 'Adicionar Produto';
                     }
                 } catch (err) {
-                    errorMsg.textContent = 'Erro de conexão.';
                     console.error("Erro ao adicionar produto:", err);
-                } finally {
+                    errorMsgElement.textContent = 'Erro de conexão.';
                     button.disabled = false;
                     button.textContent = 'Adicionar Produto';
                 }
             });
         }
-    };
 
-    // --- Lógica para Remover Produto ---
-    window.deleteProduct = async function(productId, element) {
-        if (!confirm('Tem certeza que deseja remover este produto?')) {
-            return;
-        }
-        
-        element.disabled = true;
-        element.textContent = '...';
-
-        try {
-            const response = await fetch(`/api/admin/products/${productId}`, {
-                method: 'DELETE'
-            });
-            const result = await response.json();
-
-            if (response.ok) {
-                alert(result.message);
-                element.closest('tr').remove(); // Remove a linha
-            } else {
-                alert('Erro: ' + result.message);
-                element.disabled = false;
-                element.textContent = 'Remover';
+        // Define a função deleteProduct no escopo local
+        async function deleteProduct(productId, element) {
+            if (!confirm('Tem certeza que deseja remover este produto?')) {
+                return;
             }
-        } catch (err) {
-            alert('Erro de conexão.');
-            console.error("Erro ao remover produto:", err);
-            element.disabled = false;
-            element.textContent = 'Remover';
-        }
-    };
+             if (!element) return;
 
-    // Executa setup inicial
-    window.setupProductForms();
+            element.disabled = true;
+            element.textContent = '...';
+            const originalText = 'Remover';
+
+            try {
+                const response = await fetch(`/api/admin/products/${productId}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert(result.message || 'Produto removido.');
+                    const row = element.closest('tr');
+                     if (row) row.remove(); // Remove a linha
+                } else {
+                    alert('Erro: ' + (result.message || 'Não foi possível remover.'));
+                    element.disabled = false;
+                    element.textContent = originalText;
+                }
+            } catch (err) {
+                 console.error("Erro ao remover produto:", err);
+                alert('Erro de conexão.');
+                element.disabled = false;
+                element.textContent = originalText;
+            }
+        }
+
+        // Anexa a função ao window SOMENTE se ela não existir
+         if (typeof window.deleteProduct !== 'function') {
+             window.deleteProduct = deleteProduct;
+         }
+
+        console.log("Scripts for admin_products loaded.");
+
+    })(); // Executa a função imediatamente
 </script>
 {% endblock scripts %}

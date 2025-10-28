@@ -10,9 +10,9 @@
 </div>
 
 <div class="admin-content">
-    
+
     <div class="admin-section">
-        {# Formulário de busca NÃO usa AJAX por enquanto, recarrega a página #}
+        {# O formulário de busca agora será tratado via JS no layout_admin.html #}
         <form method="GET" action="{{ url_for('admin_users') }}" class="search-form">
             <div class="form-group">
                 <label for="q">Buscar (Nome, Email, ID ou Cargo)</label>
@@ -60,29 +60,49 @@
                     </td>
                     <td>
                         <select class="role-select" data-userid="{{ user.id }}" style="background-color: var(--color-bg-tertiary); color: white; padding: 5px; border-radius: 5px;">
-                            {# Permite selecionar até UM NÍVEL ABAIXO do cargo do admin atual #}
+                            {# Permite selecionar até um nível abaixo do admin atual #}
                             {% for i in range(current_user.role) %}
-                                {# Não mostra Dev (5) se a flag estiver ativa e admin não for Dev #}
-                                {% if not (i == 5 and dev_activated and current_user.role != 5) %}
-                                <option value="{{ i }}" {{ 'selected' if i == user.role else '' }}>
-                                    {% if i == 0 %}Consumidor
-                                    {% elif i == 1 %}Vendedor
-                                    {% elif i == 2 %}Teste
-                                    {% elif i == 3 %}MKT/TI
-                                    {% elif i == 4 %}Junior
-                                    {% elif i == 5 %}Dev {# Só visível se admin for Dev ou flag inativa #}
-                                    {% else %}Cargo {{ i }} {# Improvável #}
+                                {# Não mostra Dev (5) se ativado e não for Dev a ver #}
+                                {% if not (dev_activated and i == 5 and current_user.role != 5) %}
+                                    {# Não permite selecionar cargos iguais ou superiores ao do alvo (exceto se admin for Dev) #}
+                                    {% if i < user.role or current_user.role == 5 %}
+                                        <option value="{{ i }}" {{ 'selected' if i == user.role else '' }}>
+                                            {% if i == 0 %}Consumidor
+                                            {% elif i == 1 %}Vendedor
+                                            {% elif i == 2 %}Teste
+                                            {% elif i == 3 %}MKT/TI
+                                            {% elif i == 4 %}Junior
+                                            {% elif i == 5 %}Dev {# Só aparece se admin for Dev #}
+                                            {% else %}Cargo {{ i }}
+                                            {% endif %}
+                                        </option>
                                     {% endif %}
-                                </option>
                                 {% endif %}
                             {% endfor %}
+                             {# Adiciona a opção atual do usuário (se não for ele mesmo) para visualização #}
+                             {% if user.id != current_user.id and user.role not in range(current_user.role) %}
+                                 <option value="{{ user.role }}" selected disabled>
+                                     {% if user.role == 0 %}Consumidor
+                                     {% elif user.role == 1 %}Vendedor
+                                     {% elif user.role == 2 %}Teste
+                                     {% elif user.role == 3 %}MKT/TI
+                                     {% elif user.role == 4 %}Junior
+                                     {% elif user.role == 5 %}Dev
+                                     {% else %}Cargo {{ user.role }}
+                                     {% endif %}
+                                 </option>
+                             {% endif %}
                         </select>
                     </td>
                     <td class="actions">
-                        {# Usa JS inline para chamar a função que estará no bloco scripts #}
-                        <button class="btn btn-sm btn-primary" onclick="promoteUser({{ user.id }})">
-                            Salvar
-                        </button>
+                         {# Botão Salvar só aparece se houver opções de mudança e não for o próprio usuário #}
+                        {% if user.id != current_user.id and range(user.role if current_user.role != 5 else current_user.role) %}
+                            <button class="btn btn-sm btn-primary" onclick="promoteUser({{ user.id }})">
+                                Salvar
+                            </button>
+                        {% else %}
+                             <span style="color: var(--color-text-muted); font-size: 0.8em;">N/A</span>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -97,46 +117,58 @@
 
 {% block scripts %}
 <script>
-    // Define a função no escopo global ou anexa a window para ser acessível
-    window.promoteUser = async function(userId) {
-        const row = document.querySelector(`#users-table tr[data-id="${userId}"]`);
-        if (!row) return; // Segurança: sai se a linha não for encontrada
+    // Usa IIFE para escopo local e executa imediatamente
+    (function() {
+        // Define a função promoteUser no escopo local
+        async function promoteUser(userId) {
+            const row = document.querySelector(`#users-table tr[data-id="${userId}"]`);
+            if (!row) return;
+            const select = row.querySelector('.role-select');
+            const button = row.querySelector('.btn-primary');
+            if (!select || !button) return;
 
-        const select = row.querySelector('.role-select');
-        const button = row.querySelector('.btn-primary');
-        const newRole = select.value;
-        
-        button.disabled = true;
-        button.textContent = '...';
+            const newRole = select.value;
 
-        try {
-            const response = await fetch('/api/admin/users/promote', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: userId, newRole: newRole })
-            });
-            const result = await response.json();
-            alert(result.message); // Mostra o resultado da API
+            button.disabled = true;
+            button.textContent = '...';
+            const originalText = 'Salvar';
 
-            if (response.ok) {
-                // Atualiza o texto do "Cargo Atual" na tabela dinamicamente
-                const currentRoleCell = row.cells[3]; // A 4ª célula (índice 3)
-                const roleTextMap = {
-                    0: "Consumidor", 1: "Vendedor", 2: "Teste", 3: "MKT/TI", 4: "Junior", 5: "Dev"
-                };
-                currentRoleCell.textContent = `${roleTextMap[newRole] || 'Desconhecido'} (${newRole})`;
-            } else {
-                 // Se deu erro na API, reverte a seleção no dropdown para o valor original
-                 // Precisaria saber o valor original, talvez armazenar num data attribute
-                 console.error("Falha ao atualizar cargo:", result.message);
+            try {
+                const response = await fetch('/api/admin/users/promote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: userId, newRole: newRole })
+                });
+                const result = await response.json();
+                alert(result.message || 'Operação concluída.'); // Mostra a mensagem do backend
+
+                if (response.ok) {
+                    // Recarrega o conteúdo da secção via AJAX em vez da página inteira
+                     const currentUrl = window.location.pathname + window.location.search;
+                     // A função loadContent está definida no layout_admin.html
+                     if (typeof loadContent === 'function') {
+                         loadContent(currentUrl, false); // false para não adicionar ao histórico
+                     } else {
+                         window.location.reload(); // Fallback se loadContent não estiver disponível
+                     }
+                } else {
+                     button.disabled = false;
+                     button.textContent = originalText;
+                }
+            } catch (err) {
+                console.error("Erro no promoteUser:", err);
+                alert('Erro de conexão ao tentar promover.');
+                button.disabled = false;
+                button.textContent = originalText;
             }
-        } catch (err) {
-            alert('Erro de conexão ao tentar salvar.');
-            console.error("Erro de rede:", err);
-        } finally {
-            button.disabled = false;
-            button.textContent = 'Salvar';
         }
-    }
+
+        // Anexa a função ao window SOMENTE se ela não existir
+         if (typeof window.promoteUser !== 'function') {
+             window.promoteUser = promoteUser;
+         }
+
+        console.log("Scripts for admin_users loaded.");
+    })(); // Executa a função imediatamente
 </script>
 {% endblock scripts %}

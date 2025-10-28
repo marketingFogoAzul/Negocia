@@ -62,6 +62,25 @@
                     <i class="fas fa-clipboard-list"></i> Logs de Auditoria
                 </a>
                 {% endif %}
+
+                {# --- NOVA SECÇÃO --- #}
+                <h3>Comunicação Interna</h3>
+                {# Link Visível para Todos os Admins (1-5) #}
+                <a href="{{ url_for('internal_chat', chat_room='avisos') }}" class="ajax-link {{ 'active' if request.endpoint == 'internal_chat' and chat_room == 'avisos' }}">
+                    <i class="fas fa-bullhorn"></i> Avisos
+                </a>
+                {# Link Visível para Todos os Admins (1-5) #}
+                 <a href="{{ url_for('internal_chat', chat_room='geral') }}" class="ajax-link {{ 'active' if request.endpoint == 'internal_chat' and chat_room == 'geral' }}">
+                    <i class="fas fa-users"></i> Chat Geral (Admins)
+                </a>
+                {# Link Visível Apenas para 3, 4, 5 #}
+                {% if current_user.role >= 3 %}
+                 <a href="{{ url_for('internal_chat', chat_room='adm') }}" class="ajax-link {{ 'active' if request.endpoint == 'internal_chat' and chat_room == 'adm' }}">
+                    <i class="fas fa-user-shield"></i> Chat Adm (Restrito)
+                </a>
+                {% endif %}
+                 {# --- FIM NOVA SECÇÃO --- #}
+
             {% endif %}
         </div>
 
@@ -109,7 +128,6 @@
 {% endblock %}
 
 {% block scripts %}
-{# Script AJAX para carregar conteúdo dinamicamente #}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const mainContent = document.getElementById('main-content-ajax');
@@ -117,24 +135,23 @@
 
         // Função para executar scripts dentro do HTML carregado via AJAX
         function executeScripts(containerElement) {
-            // Remove scripts antigos associados a esta função para evitar duplicação
-            const oldAjaxScripts = document.querySelectorAll('script[data-ajax-script="true"]');
-            oldAjaxScripts.forEach(s => s.remove());
-
             const scripts = containerElement.querySelectorAll('script');
-            scripts.forEach(originalScript => {
+            scripts.forEach(script => {
                 const newScript = document.createElement('script');
-                newScript.setAttribute('data-ajax-script', 'true'); // Marca o script como adicionado via AJAX
-                if (originalScript.src) {
-                    newScript.src = originalScript.src;
-                    newScript.async = false; // Tenta carregar em ordem
+                if (script.src) {
+                    newScript.src = script.src;
+                    newScript.async = false; // Garante execução sequencial se houver dependências
+                    document.body.appendChild(newScript);
+                    newScript.onload = () => { /*console.log('Script loaded:', script.src);*/ }; // Feedback opcional
+                    newScript.onerror = () => { console.error('Error loading script:', script.src); };
                 } else {
-                    newScript.textContent = originalScript.textContent;
+                    newScript.textContent = script.textContent;
+                     document.body.appendChild(newScript);
                 }
-                document.body.appendChild(newScript); // Adiciona ao body
+                // Não removemos o script original do container, pois ele não será executado
+                // pelo navegador ao ser injetado via innerHTML. Apenas o newScript será.
             });
         }
-
 
         // Função para carregar conteúdo via AJAX
         async function loadContent(url, pushState = true) {
@@ -150,63 +167,90 @@
                     }
                 });
 
-                const responseText = await response.text(); // Lê o corpo da resposta
-
                 if (!response.ok) {
                     // Tenta obter mensagem de erro do corpo, se houver
                     let errorMsg = `HTTP error! status: ${response.status}`;
-                    try {
-                        const errorData = JSON.parse(responseText); // Tenta JSON primeiro
-                        errorMsg = errorData.message || errorMsg;
-                    } catch (e) {
-                         // Se não for JSON, usa o texto ou extrai do HTML de erro
-                         const match = responseText.match(/<title>(.*?)<\/title>/i);
+                    let errorDetails = ''; // Para detalhes adicionais
+                    const contentType = response.headers.get('content-type');
+
+                    if (contentType && contentType.includes('application/json')) {
+                         try {
+                             const errorData = await response.json();
+                             errorMsg = errorData.message || `Erro ${response.status}`;
+                         } catch (e) { /* Ignora erro de parsing JSON */ }
+                    } else {
+                         // Se for HTML (página de erro do Flask/Werkzeug) ou texto
+                         errorDetails = await response.text();
+                         const match = errorDetails.match(/<title>(.*?)<\/title>/i);
                          if (match && match[1]) {
                              errorMsg = match[1]; // Ex: "403 Forbidden"
                          } else {
-                             // Pega a primeira linha ou primeiros 100 caracteres como fallback
-                             errorMsg = responseText.split('\n')[0].substring(0, 100) || errorMsg;
+                              // Se não encontrar título, usa o início do texto como fallback
+                             errorMsg = errorDetails.substring(0, 150).replace(/<[^>]+>/g, ' ').trim() || errorMsg;
                          }
+                         console.error('AJAX Error Response Body:', errorDetails); // Log completo para debug
                     }
-                     console.error('AJAX Error Response Body:', responseText); // Log completo para debug
                     throw new Error(errorMsg);
                 }
 
-                // Extrai o conteúdo principal (assumindo que está dentro de um elemento com id="ajax-content-wrapper" no layout_partial)
-                // Ou simplesmente insere todo o HTML retornado se layout_partial só tiver o bloco content
-                mainContent.innerHTML = responseText;
+                const html = await response.text();
+                // Limpa o conteúdo anterior ANTES de adicionar o novo
+                mainContent.innerHTML = '';
+                // Cria um container temporário para inserir o HTML e extrair elementos
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
 
-                // Executa quaisquer scripts que possam estar no HTML carregado
-                executeScripts(mainContent);
+                // Move os filhos do tempDiv (o conteúdo real) para o mainContent
+                while (tempDiv.firstChild) {
+                    mainContent.appendChild(tempDiv.firstChild);
+                }
 
-                // Atualiza a URL na barra de endereço e o título da página
+                // Tenta encontrar o título DENTRO do HTML carregado (se o template parcial o incluir)
+                 const titleElement = mainContent.querySelector('title'); // Procura por <title> no conteúdo carregado
+                 let pageTitle = "Admin Panel"; // Título padrão
+                 if (titleElement) {
+                     pageTitle = titleElement.textContent.trim();
+                     titleElement.remove(); // Remove o <title> do conteúdo principal
+                 } else {
+                      // Tenta obter o título do link clicado como fallback
+                     const activeLink = sidebarNav.querySelector(`a.ajax-link[href="${url.split('?')[0]}"]`);
+                     if (activeLink) {
+                         pageTitle = activeLink.textContent.trim().replace(/^[ \n]+|[ \n]+$/g, '').replace(/\s+/g, ' '); // Limpa whitespace
+                         if (pageTitle) pageTitle += " - Admin";
+                     }
+                 }
+                 document.title = pageTitle;
+
+                // Atualiza a URL na barra de endereço
                 if (pushState) {
                     history.pushState({ path: url }, '', url);
                 }
-                 // Tenta extrair o título do novo conteúdo (se existir)
-                 // Procura por um h1 dentro do admin-header como fallback
-                 const headerTitle = mainContent.querySelector('.admin-header h1');
-                 if (headerTitle) {
-                     document.title = headerTitle.textContent.trim() + " - Admin";
-                 } else {
-                     // Tenta obter o título do link clicado
-                     const activeLink = sidebarNav.querySelector(`a.ajax-link[href="${url.split('?')[0]}"]`);
-                     document.title = activeLink ? activeLink.textContent.trim() + " - Admin" : "Admin Panel";
-                 }
-
 
                 // Atualiza a classe 'active' na sidebar
                 updateActiveLink(url);
 
+                 // Executa quaisquer scripts que possam estar no bloco scripts do HTML carregado
+                executeScripts(mainContent); // Chama a função para executar scripts
+
+
             } catch (error) {
                 console.error('Erro ao carregar conteúdo via AJAX:', error);
-                mainContent.innerHTML = `<div style="padding: 20px; color: var(--color-danger);">
-                                            <strong>Erro ao carregar:</strong> ${error.message}<br>
-                                            Verifique a consola para mais detalhes.
+                mainContent.innerHTML = `<div class="admin-header" style="background-color: var(--color-danger); color: white;">
+                                            <h1>Erro ao Carregar</h1>
+                                         </div>
+                                         <div class="admin-content">
+                                             <p style="color: var(--color-text-primary);">Não foi possível carregar a secção solicitada.</p>
+                                             <p style="color: var(--color-text-muted); font-size: 0.9em;">Detalhe: ${error.message}</p>
+                                             <p><a href="${url}" target="_blank">Tentar abrir numa nova aba</a></p>
                                          </div>`;
             } finally {
                  mainContent.style.opacity = '1'; // Remove o loading
                  mainContent.style.pointerEvents = 'auto'; // Reabilita interação
+                 // Remove flash messages antigas (se houver) que NÃO estão dentro do mainContent
+                 const globalFlashes = document.querySelector('.flash-messages:not(#main-content-ajax .flash-messages)');
+                 if (globalFlashes) {
+                    // globalFlashes.remove(); // Descomentar se quiser remover flashes globais a cada navegação
+                 }
             }
         }
 
@@ -214,13 +258,18 @@
         function updateActiveLink(url) {
             const currentPath = url.split('?')[0]; // Ignora query parameters
             sidebarNav.querySelectorAll('a.ajax-link').forEach(link => {
+                 // Trata o caso especial de /admin ser o mesmo que /admin/dashboard
                  const linkPath = link.getAttribute('href');
                  let isActive = linkPath === currentPath;
-                 // Trata o caso especial de /admin ser o mesmo que /admin/dashboard
-                 if ((currentPath === '/admin' || currentPath === '/admin/dashboard') &&
-                     (linkPath === '/admin' || linkPath === '/admin/dashboard')) {
+                 // Se a URL atual é /admin E o link é /admin/dashboard, marca ativo
+                 if (currentPath === '{{ url_for("admin_dashboard", _external=False) }}'.replace('/dashboard', '') && linkPath === '{{ url_for("admin_dashboard", _external=False) }}') {
                      isActive = true;
                  }
+                  // Se a URL atual é /admin/dashboard E o link é /admin (caso exista), marca ativo
+                 if (currentPath === '{{ url_for("admin_dashboard", _external=False) }}' && linkPath === '{{ url_for("admin_dashboard", _external=False) }}'.replace('/dashboard', '')) {
+                      isActive = true;
+                 }
+
 
                 if (isActive) {
                     link.classList.add('active');
@@ -236,9 +285,8 @@
             if (link) {
                 event.preventDefault(); // Impede a navegação normal
                 const url = link.getAttribute('href');
-                // Evita recarregar a mesma página
                 const currentFullUrl = window.location.pathname + window.location.search;
-                if (url !== currentFullUrl && url !== currentFullUrl.split('?')[0]) {
+                if (url !== currentFullUrl && url !== window.location.pathname ) { // Evita recarregar a mesma página
                      loadContent(url);
                 }
             }
@@ -250,20 +298,37 @@
                 // Carrega o conteúdo do estado anterior sem adicionar ao histórico
                 loadContent(event.state.path, false);
             } else {
-                 // Fallback: carrega o dashboard se não houver estado e não estivermos já lá
+                 // Fallback: carrega o dashboard se não houver estado
                  const dashboardUrl = '{{ url_for("admin_dashboard") }}';
-                 if (window.location.pathname !== dashboardUrl && window.location.pathname !== '/admin') {
+                 // Evita recarregar se já estiver no dashboard
+                 if (window.location.pathname !== dashboardUrl && window.location.pathname !== dashboardUrl.replace('/dashboard', '')) {
                       loadContent(dashboardUrl, false);
                  }
             }
         });
 
-        // Adiciona o estado inicial ao histórico
+        // Adiciona o estado inicial ao histórico para o botão voltar funcionar corretamente
         history.replaceState({ path: window.location.pathname + window.location.search }, '', window.location.pathname + window.location.search);
         updateActiveLink(window.location.pathname); // Marca o link ativo inicial
 
+        // Delegação de eventos para formulários carregados via AJAX (Exemplo para busca)
+        // Isso garante que formulários carregados dinamicamente também funcionem com AJAX (se desejado)
+        mainContent.addEventListener('submit', async function(event) {
+            const form = event.target.closest('.search-form'); // Adapte o seletor se necessário
+            if (form && form.method.toLowerCase() === 'get') { // Apenas para GET por enquanto
+                event.preventDefault();
+                const formData = new FormData(form);
+                const searchParams = new URLSearchParams(formData);
+                const url = form.action + '?' + searchParams.toString();
+                loadContent(url); // Recarrega o conteúdo com os parâmetros de busca
+            }
+            // Adicionar lógica para POST se necessário (mais complexo)
+        });
+
+        // Tenta executar scripts que já possam estar no conteúdo inicial
+        executeScripts(mainContent);
+
+
     });
 </script>
-{# Scripts específicos de cada página admin serão carregados aqui pelo AJAX #}
-{% block page_scripts %}{% endblock %}
 {% endblock %}

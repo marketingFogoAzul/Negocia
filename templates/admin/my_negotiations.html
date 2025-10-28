@@ -33,9 +33,9 @@
                     <td>{{ review.product_name | default('N/A', true) }}</td>
                     <td style="white-space: nowrap;">{{ review.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
                     <td>
-                        {# Link para chat NÃO é ajax, pois muda para layout_chat #}
+                        {# Link para chat existente NÃO deve ser AJAX pois muda para layout_chat #}
                         <a href="{{ url_for('existing_chat_page', chat_id=review.id) }}" class="btn btn-sm btn-gray">Ver</a>
-                        {# Formulário de assumir usa JS inline #}
+                        {# Formulário de Assumir (ação via JS, não navegação) #}
                         <form action="{{ url_for('api_assume_negotiation', chat_id=review.id) }}" method="POST" style="display: inline;" onsubmit="return handleAssume(event, this)">
                             <button type="submit" class="btn btn-sm btn-warning">Assumir</button>
                         </form>
@@ -74,7 +74,7 @@
                         </span>
                     </td>
                     <td>
-                        {# Link para chat NÃO é ajax #}
+                         {# Link para chat existente NÃO deve ser AJAX #}
                         <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}" class="btn btn-sm btn-primary">
                             <i class="fas fa-comment"></i> Responder
                         </a>
@@ -109,7 +109,7 @@
                     <td>{{ chat.product_name | default('N/A', 'true') }}</td>
                     <td style="white-space: nowrap;">{{ chat.created_at.strftime('%d/%m/%Y') }}</td>
                     <td>
-                        {# Link para chat NÃO é ajax #}
+                         {# Link para chat existente NÃO deve ser AJAX #}
                         <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}" class="btn btn-sm btn-gray">
                             Ver Histórico
                         </a>
@@ -126,46 +126,56 @@
 {% endblock content %}
 
 {% block scripts %}
-{# Script para o botão "Assumir" agora está aqui dentro #}
 <script>
-    // É importante definir a função no escopo global ou anexá-la a um objeto global
-    // para que o `onsubmit` inline possa encontrá-la, especialmente com carregamento AJAX.
-    window.handleAssume = async function(event, formElement) {
-        event.preventDefault();
-        const form = formElement; // Usar o elemento passado
-        const button = form.querySelector('button');
-        const row = form.closest('tr'); // Encontra a linha da tabela
-        const chatId = form.action.split('/').pop(); // Pega o ID do chat da URL da action
+    // Usa IIFE para escopo local e executa imediatamente
+    (function() {
+        // Define a função handleAssume no escopo local
+        async function handleAssume(event, formElement) {
+            event.preventDefault();
+            const form = formElement; // Usa o elemento passado
+            if (!form) {
+                 console.error("Form element not found for handleAssume");
+                 return false;
+            }
+            const button = form.querySelector('button[type="submit"]');
+            if (!button) {
+                 console.error("Submit button not found in form for handleAssume");
+                 return false;
+            }
 
-        button.disabled = true;
-        button.textContent = '...';
+            button.disabled = true;
+            button.textContent = '...';
 
-        try {
-            const response = await fetch(form.action, { method: 'POST' });
-            const result = await response.json();
+            try {
+                const response = await fetch(form.action, { method: 'POST' });
+                const result = await response.json();
 
-            if (result.success) {
-                alert(result.message);
-                // Remove a linha da fila "Disponíveis"
-                if (row) {
-                    row.style.opacity = '0.5'; // Atenua a linha
-                    row.remove(); // Ou remove completamente
+                if (result.success) {
+                    alert(result.message);
+                    // Redireciona para a página do chat assumido (NÃO via AJAX)
+                    window.location.href = `/chat/${form.action.split('/').pop()}`;
+                } else {
+                    alert('Erro: ' + result.message);
+                    button.disabled = false;
+                    button.textContent = 'Assumir';
                 }
-                // Idealmente, a seção "Em Andamento" deveria ser atualizada dinamicamente aqui também,
-                // mas por simplicidade, apenas removemos da fila.
-                // Opcional: Redirecionar para o chat assumido (não AJAX)
-                 window.location.href = `/chat/${chatId}`;
-            } else {
-                alert('Erro: ' + result.message);
+            } catch (err) {
+                alert('Erro de conexão.');
                 button.disabled = false;
                 button.textContent = 'Assumir';
             }
-        } catch (err) {
-            alert('Erro de conexão.');
-            button.disabled = false;
-            button.textContent = 'Assumir';
+            return false; // Previne submissão padrão do formulário
         }
-        return false; // Previne o submit tradicional do form
-    }
+
+        // Anexa a função ao window SOMENTE se ela não existir
+        // para que o onsubmit="handleAssume(event, this)" funcione
+         if (typeof window.handleAssume !== 'function') {
+            window.handleAssume = handleAssume;
+         }
+
+        // Se houver outros scripts específicos desta página, adicione aqui.
+        console.log("Scripts for my_negotiations loaded.");
+
+    })(); // Executa a função imediatamente
 </script>
 {% endblock scripts %}

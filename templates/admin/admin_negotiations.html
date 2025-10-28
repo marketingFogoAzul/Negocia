@@ -12,7 +12,7 @@
 <div class="admin-content">
 
     <div class="admin-section">
-        {# Busca NÃO usa AJAX #}
+         {# Formulário de busca tratado via JS #}
         <form method="GET" action="{{ url_for('admin_negotiations') }}" class="search-form">
             <div class="form-group" style="grid-column: 1 / 3;">
                 <label for="q">Buscar (Cliente, Vendedor ou ID do Chat)</label>
@@ -43,10 +43,10 @@
                     <td>{{ chat.user_name }}<br><small>{{ chat.user_email }}</small></td>
                     <td>{{ chat.product_name | default('N/A') }}</td>
                     <td>{{ chat.assigned_admin | default('N/A') }}</td>
-                    <td><span class="status-{{chat.status}}">{{ chat.status }}</span></td>
-                    <td style="white-space: nowrap;">{{ chat.created_at.strftime('%d/%m/%Y %H:%M') if chat.created_at else 'N/A' }}</td>
+                    <td><span class="status-{{chat.status}}">{{ chat.status | replace('_', ' ') }}</span></td> {# Formata status #}
+                    <td style="white-space: nowrap;">{{ chat.created_at.strftime('%d/%m/%Y %H:%M') if chat.created_at else 'N/A' }}</td> {# Verifica se existe #}
                     <td>
-                        {# Link para chat NÃO é ajax #}
+                        {# Link para chat existente NÃO deve ser AJAX #}
                         <a href="{{ url_for('existing_chat_page', chat_id=chat.id) }}" class="btn btn-sm btn-gray">
                             Ver Histórico
                         </a>
@@ -63,5 +63,5 @@
 {% endblock content %}
 
 {% block scripts %}
-{# Nenhum script específico para esta página #}
+{# Sem scripts específicos para esta página por enquanto #}
 {% endblock scripts %}

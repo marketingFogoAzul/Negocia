@@ -1,4 +1,5 @@
-{% extends "layout_admin.html" %}
+{% extends base_template | default("layout_admin.html") %}
+
 {% block title %}Filtrar IA{% endblock %}
 {% block body_class %}admin-layout{% endblock %}
 
@@ -23,7 +24,7 @@
                     <option value="palavra_bloqueada">Palavra Bloqueada (IA não pode dizer)</option>
                 </select>
             </div>
-            <p class="error-message full-width"></p>
+            <p class="error-message full-width" id="add-filter-error"></p> {# Adicionado ID #}
             <button type="submit" class="btn btn-primary">Adicionar Regra</button>
         </form>
     </div>
@@ -49,7 +50,7 @@
                         </span>
                     </td>
                     <td>{{ filter.content }}</td>
-                    <td>{{ filter.created_at.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ filter.created_at.strftime('%d/%m/%Y') if filter.created_at else 'N/A' }}</td> {# Verifica se created_at existe #}
                     <td>
                         <button class="btn btn-sm btn-danger" onclick="deleteFilter({{ filter.id }}, this)">
                             Remover
@@ -64,74 +65,101 @@
         {% endif %}
     </div>
 </div>
-{% endblock %}
+{% endblock content %}
 
 {% block scripts %}
 <script>
-    // --- Lógica para Adicionar Filtro ---
-    const addForm = document.getElementById('add-filter-form');
-    addForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const button = addForm.querySelector('button');
-        const errorMsg = addForm.querySelector('.error-message');
-        button.disabled = true;
-        button.textContent = 'Salvando...';
-        errorMsg.textContent = '';
-        
-        const data = {
-            content: document.getElementById('content').value,
-            rule_type: document.getElementById('rule_type').value,
-        };
+    // Usa IIFE para escopo local e executa imediatamente
+    (function() {
+        const addForm = document.getElementById('add-filter-form');
+        const errorMsgElement = document.getElementById('add-filter-error'); // Usa o ID
 
-        try {
-            const response = await fetch('/api/admin/filters', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+        if (addForm && errorMsgElement) {
+            addForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const button = addForm.querySelector('button[type="submit"]');
+                if (!button) return;
+
+                button.disabled = true;
+                button.textContent = 'Salvando...';
+                errorMsgElement.textContent = ''; // Limpa erro anterior
+
+                const data = {
+                    content: document.getElementById('content').value,
+                    rule_type: document.getElementById('rule_type').value,
+                };
+
+                try {
+                    const response = await fetch('/api/admin/filters', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        alert(result.message || 'Regra adicionada!');
+                         // Recarrega o conteúdo via AJAX
+                         if (typeof loadContent === 'function') {
+                             loadContent(window.location.pathname + window.location.search, false);
+                         } else {
+                             window.location.reload();
+                         }
+                    } else {
+                        errorMsgElement.textContent = result.message || 'Erro desconhecido.';
+                         button.disabled = false; // Reabilita em caso de erro
+                         button.textContent = 'Adicionar Regra';
+                    }
+                } catch (err) {
+                    console.error("Erro ao adicionar filtro:", err);
+                    errorMsgElement.textContent = 'Erro de conexão.';
+                    button.disabled = false;
+                    button.textContent = 'Adicionar Regra';
+                }
             });
-            const result = await response.json();
+        }
 
-            if (response.ok) {
-                alert(result.message);
-                window.location.reload(); 
-            } else {
-                errorMsg.textContent = result.message;
+        // Define a função deleteFilter no escopo local
+        async function deleteFilter(filterId, element) {
+            if (!confirm('Tem certeza que deseja remover esta regra?')) {
+                return;
             }
-        } catch (err) {
-            errorMsg.textContent = 'Erro de conexão.';
-        } finally {
-            button.disabled = false;
-            button.textContent = 'Adicionar Regra';
-        }
-    });
+            if (!element) return;
 
-    // --- Lógica para Remover Filtro ---
-    async function deleteFilter(filterId, element) {
-        if (!confirm('Tem certeza que deseja remover esta regra?')) {
-            return;
-        }
-        element.disabled = true;
-        element.textContent = '...';
+            element.disabled = true;
+            element.textContent = '...';
+            const originalText = 'Remover';
 
-        try {
-            const response = await fetch(`/api/admin/filters/${filterId}`, {
-                method: 'DELETE'
-            });
-            const result = await response.json();
+            try {
+                const response = await fetch(`/api/admin/filters/${filterId}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
 
-            if (response.ok) {
-                alert(result.message);
-                element.closest('tr').remove(); // Remove a linha
-            } else {
-                alert('Erro: ' + result.message);
+                if (response.ok) {
+                    alert(result.message || 'Regra removida.');
+                    const row = element.closest('tr');
+                    if (row) row.remove(); // Remove a linha da tabela
+                } else {
+                    alert('Erro: ' + (result.message || 'Não foi possível remover.'));
+                    element.disabled = false;
+                    element.textContent = originalText;
+                }
+            } catch (err) {
+                console.error("Erro ao remover filtro:", err);
+                alert('Erro de conexão.');
                 element.disabled = false;
-                element.textContent = 'Remover';
+                element.textContent = originalText;
             }
-        } catch (err) {
-            alert('Erro de conexão.');
-            element.disabled = false;
-            element.textContent = 'Remover';
         }
-    }
+
+         // Anexa a função ao window SOMENTE se ela não existir
+         if (typeof window.deleteFilter !== 'function') {
+             window.deleteFilter = deleteFilter;
+         }
+
+         console.log("Scripts for admin_filters loaded.");
+
+    })(); // Executa a função imediatamente
 </script>
-{% endblock %}
+{% endblock scripts %}

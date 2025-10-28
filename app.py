@@ -162,19 +162,23 @@ def permission_required(permission):
 
 # --- Função helper para renderizar parcial ou completo ---
 def render_admin_template(template_name_or_list, **context):
-    """Renderiza o template completo ou apenas o bloco 'content' para AJAX."""
+    """Renderiza o template completo ou apenas o bloco 'content' e 'scripts' para AJAX."""
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        # Renderiza apenas o bloco de conteúdo para requisições AJAX
-        # Usando um layout base mínimo para apenas incluir os blocos necessários
+        # Renderiza usando um layout base mínimo para apenas incluir os blocos necessários
         context['is_partial'] = True
-        base_template = "layout_partial.html"
+        # Passa o nome do template original para que layout_partial possa incluí-lo se necessário,
+        # mas a forma mais simples é o template original herdar condicionalmente.
+        # Vamos usar a abordagem de herança condicional no template filho.
+        base_template = "layout_partial.html" # Layout quase vazio
     else:
         # Renderiza a página completa (herdando de layout_admin.html)
         context['is_partial'] = False
-        base_template = "layout_admin.html"
+        base_template = "layout_admin.html" # Layout completo
 
-    # Renderiza o template específico, que por sua vez herda do base_template correto
-    return render_template(template_name_or_list, **context, base_template=base_template)
+    # Passa a variável base_template para o contexto,
+    # para que o template filho possa usá-la no {% extends %}
+    context['base_template'] = base_template
+    return render_template(template_name_or_list, **context)
 
 
 def get_db_connection():
@@ -391,6 +395,35 @@ def get_gemini_response(user_message, chat_history=None, product_info=None):
         # Considerar logar o 'full_prompt' aqui para debug
         return "Desculpe, ocorreu um erro interno ao processar sua mensagem. Tente novamente mais tarde."
 
+# --- Funções Helper para Configurações ---
+def get_setting(key, default=None):
+    """Busca um valor da tabela app_settings."""
+    result = query_db("SELECT setting_value FROM app_settings WHERE setting_key = %s", (key,), one=True)
+    return result['setting_value'] if result else default
+
+def get_bool_setting(key, default=False):
+    """Busca um valor booleano da tabela app_settings."""
+    value = get_setting(key)
+    if value is None:
+        return default
+    return value.lower() == 'true'
+
+def set_setting(key, value, description=None):
+    """Atualiza ou insere um valor na tabela app_settings."""
+    # Converte booleano para string 'true'/'false' se necessário
+    if isinstance(value, bool):
+        value = 'true' if value else 'false'
+
+    query = """
+        INSERT INTO app_settings (setting_key, setting_value, description, updated_at)
+        VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+        ON CONFLICT (setting_key) DO UPDATE SET
+            setting_value = EXCLUDED.setting_value,
+            description = COALESCE(EXCLUDED.description, app_settings.description),
+            updated_at = CURRENT_TIMESTAMP
+    """
+    return execute_db(query, (key, str(value), description))
+
 # --- ROTAS DE PÁGINAS (VIEW/CONTROLLER) ---
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -535,12 +568,22 @@ def new_chat_page():
 
     recent_chats = get_recent_chats(current_user.id)
 
+    # Obter configurações WebRTC relevantes para o utilizador atual
+    user_type = "admin" if current_user.role >= 1 else "user"
+    webrtc_settings = {
+        'audio_enabled': get_bool_setting(f'webrtc_audio_call_{user_type}_enabled'),
+        'video_enabled': get_bool_setting(f'webrtc_video_call_{user_type}_enabled'),
+        'screen_enabled': get_bool_setting(f'webrtc_screen_share_{user_type}_enabled'),
+    }
+
     # Usa layout_chat.html
     return render_template('chat.html',
                          recent_chats=recent_chats,
                          chat_id=None,
                          chat_history=None,
-                         chat_data=None # Indica um novo chat
+                         chat_data=None, # Indica um novo chat
+                         is_admin_viewing_others_chat=False, # Novo chat nunca tem botões admin
+                         webrtc_settings=webrtc_settings # Passa as configurações
                          )
 
 @app.route('/chat/<int:chat_id>')
@@ -598,12 +641,32 @@ def existing_chat_page(chat_id):
     session.pop('current_chat_id', None)
     session.pop('negotiation_data', None)
 
+    # --- LÓGICA is_admin_viewing_others_chat ---
+    # Determina se é um admin a ver o chat de outra pessoa ou um chat assumido por si
+    is_admin_viewing_others_chat = False
+    if current_user.role >= 1:
+        # É admin a ver chat de outro OU chat atribuído a si?
+        if chat_data['user_id'] != current_user.id or chat_data.get('assigned_to') == current_user.id:
+             is_admin_viewing_others_chat = True
+    # --- FIM LÓGICA ---
+
+    # Obter configurações WebRTC relevantes para o utilizador atual
+    user_type = "admin" if current_user.role >= 1 else "user"
+    webrtc_settings = {
+        'audio_enabled': get_bool_setting(f'webrtc_audio_call_{user_type}_enabled'),
+        'video_enabled': get_bool_setting(f'webrtc_video_call_{user_type}_enabled'),
+        'screen_enabled': get_bool_setting(f'webrtc_screen_share_{user_type}_enabled'),
+    }
+
     # Usa layout_chat.html
     return render_template('chat.html',
                          chat_data=chat_data,
                          chat_history=history or [],
                          chat_id=chat_id,
-                         recent_chats=recent_chats)
+                         recent_chats=recent_chats,
+                         is_admin_viewing_others_chat=is_admin_viewing_others_chat, # Passa para o template
+                         webrtc_settings=webrtc_settings # Passa as configurações
+                         )
 
 # --- PAINEL ADMINISTRATIVO ---
 
@@ -787,21 +850,27 @@ def api_delete_filter(filter_id):
 @permission_required('promote_to_junior') # Visível para MKT/TI, Junior, Dev (Cargos 3, 4, 5)
 def admin_webrtc():
     """Página para gerenciar configurações do WebRTC."""
-    # Por agora, as funcionalidades e os seus estados são hardcoded.
-    # No futuro, isto viria de uma tabela de configuração no DB.
-    webrtc_features = [
-        {'id': 'audio_call', 'name': 'Chamada de Áudio', 'user_enabled': False, 'admin_enabled': False},
-        {'id': 'video_call', 'name': 'Chamada de Vídeo', 'user_enabled': False, 'admin_enabled': False},
-        {'id': 'screen_share', 'name': 'Partilha de Ecrã', 'user_enabled': False, 'admin_enabled': False},
-        {'id': 'notifications', 'name': 'Notificações/Som de Chamada', 'user_enabled': True, 'admin_enabled': True}, # Exemplo ativo
-        {'id': 'status_online', 'name': 'Status Online/Offline', 'user_enabled': True, 'admin_enabled': True}, # Exemplo ativo
-        # 'Ringing', 'Cancel Call', 'Mute' são funcionalidades dentro das chamadas,
-        # controladas pelos botões de chamada em si, não precisam de toggle geral aqui.
-    ]
+    # Ler configurações da base de dados
+    features_config = {
+        'audio_call': {'name': 'Chamada de Áudio'},
+        'video_call': {'name': 'Chamada de Vídeo'},
+        'screen_share': {'name': 'Partilha de Ecrã'},
+        'notifications': {'name': 'Notificações/Som de Chamada'},
+        'status_online': {'name': 'Status Online/Offline'}
+    }
+    webrtc_features = []
+    for key, config in features_config.items():
+        webrtc_features.append({
+            'id': key,
+            'name': config['name'],
+            'user_enabled': get_bool_setting(f'webrtc_{key}_user_enabled'),
+            'admin_enabled': get_bool_setting(f'webrtc_{key}_admin_enabled')
+        })
+
     # Utiliza a função helper para renderizar
     return render_admin_template('admin/admin_webrtc.html', features=webrtc_features)
 
-# Adicione também um endpoint API placeholder (sem lógica por agora)
+# Endpoint API para guardar as configurações WebRTC
 @app.route('/api/admin/webrtc/toggle', methods=['POST'])
 @login_required
 @permission_required('promote_to_junior')
@@ -809,14 +878,67 @@ def api_toggle_webrtc_feature():
     data = request.json
     feature_id = data.get('feature_id')
     access_type = data.get('access_type') # 'user' or 'admin'
-    new_state = data.get('enabled')
+    new_state = data.get('enabled') # boolean true/false
 
-    # --- LÓGICA DE ATUALIZAÇÃO NO BANCO DE DADOS VIRIA AQUI NO FUTURO ---
-    print(f"Placeholder: Toggle WebRTC feature '{feature_id}' for '{access_type}' to '{new_state}'")
-    # Simular sucesso por agora
-    log_action(current_user, 'WEBRTC_TOGGLE', details=f"Feature: {feature_id}, Access: {access_type}, State: {new_state}")
-    return jsonify({'success': True, 'message': f'Configuração {feature_id} atualizada (placeholder).'})
+    if not feature_id or access_type not in ['user', 'admin'] or new_state is None:
+        return jsonify({'success': False, 'message': 'Dados inválidos.'}), 400
+
+    setting_key = f"webrtc_{feature_id}_{access_type}_enabled"
+
+    # Guarda a nova configuração na base de dados
+    success = set_setting(setting_key, new_state)
+
+    if success:
+        log_action(current_user, 'WEBRTC_TOGGLE', details=f"Feature: {feature_id}, Access: {access_type}, State: {new_state}")
+        return jsonify({'success': True, 'message': f'Configuração {feature_id} para {access_type} atualizada.'})
+    else:
+        return jsonify({'success': False, 'message': 'Erro ao guardar configuração na base de dados.'}), 500
 # --- FIM: NOVA ROTA WEBRTC ---
+
+# --- INÍCIO: NOVA ROTA CHATS INTERNOS ---
+@app.route('/admin/internal_chat/<chat_room>')
+@login_required
+@role_required(min_role=1) # Acesso base para todos os admins
+def internal_chat(chat_room):
+    # Validar chat_room e permissões de acesso específicas
+    allowed_rooms = {'avisos': 1, 'geral': 1, 'adm': 3} # room: min_role_to_view
+
+    if chat_room not in allowed_rooms:
+        abort(404) # Sala não encontrada
+
+    min_role_needed = allowed_rooms[chat_room]
+    if current_user.role < min_role_needed:
+         # Se for AJAX, retorna erro, senão redireciona
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            abort(403) # Forbidden
+        flash("Acesso negado a esta sala de chat.", "danger")
+        return redirect(url_for('admin_dashboard')) # Volta para o dashboard
+
+    # Determinar permissão de escrita
+    can_write = False
+    if chat_room == 'avisos' and current_user.role >= 3:
+        can_write = True
+    elif chat_room == 'geral' and current_user.role >= 1: # Todos admins podem escrever
+        can_write = True
+    elif chat_room == 'adm' and current_user.role >= 3:
+         can_write = True
+
+    room_titles = {
+        'avisos': 'Canal de Avisos',
+        'geral': 'Chat Geral (Admins)',
+        'adm': 'Chat ADM (Restrito 3+)'
+    }
+    room_title = room_titles.get(chat_room, 'Chat Interno')
+
+    # Por agora, apenas renderiza um template placeholder
+    # No futuro, buscaria mensagens, etc. (usar SocketIO seria ideal aqui)
+    return render_admin_template('admin/internal_chat.html',
+                                 chat_room=chat_room,
+                                 room_title=room_title,
+                                 can_write=can_write,
+                                 messages=[]) # Lista de mensagens vazia por agora
+# --- FIM: NOVA ROTA CHATS INTERNOS ---
+
 
 @app.route('/admin/negotiations')
 @login_required
@@ -955,12 +1077,6 @@ def admin_logs():
                            total_pages=total_pages)
 
 # --- APIs (Autenticação, Chat, Admin) ---
-# (As APIs permanecem as mesmas das respostas anteriores, pois a lógica delas estava correta)
-# Incluindo: /api/auth/register, /api/auth/login, /api/chat/user_message,
-# /api/chat/request_review/<id>, /api/chat/admin_message/<id>,
-# /api/chat/disable_ia/<id>, /api/chat/close/<id>,
-# /api/admin/products, /api/admin/products/<id>,
-# /api/admin/users/promote, /api/admin/negotiations/assume/<id>
 
 # --- API DE AUTENTICAÇÃO ---
 @app.route('/api/auth/register', methods=['POST'])
@@ -1032,7 +1148,45 @@ def api_login():
         return jsonify({'success': False, 'message': 'E-mail ou senha inválidos.'}), 401
 
 # --- API DO CHAT ---
-# Nenhuma mudança aqui desde a última versão completa
+# Presume a existência destas funções
+def save_message(chat_id, sender_type, text, sender_id=None):
+     print(f"Placeholder: Saving message to chat {chat_id} from {sender_type} (ID: {sender_id}): {text}")
+     # Lógica real para inserir na tabela 'messages'
+     timestamp = datetime.now() # Ou obter do DB
+     execute_db(
+         "INSERT INTO messages (chat_id, sender_type, text, sender_id, timestamp) VALUES (%s, %s, %s, %s, %s)",
+         (chat_id, sender_type, text, sender_id, timestamp)
+     )
+     return {'timestamp': timestamp} # Retorna info útil se necessário
+
+def process_chat_state_machine(user_message, user):
+     print(f"Placeholder: Processing state machine for user {user.id} with message: {user_message}")
+     # Lógica da state machine viria aqui...
+     # Por agora, apenas chama o Gemini diretamente
+     chat_id = session.get('current_chat_id')
+     history = []
+     if chat_id:
+          history_raw = query_db("SELECT sender_type, text FROM messages WHERE chat_id = %s ORDER BY timestamp DESC LIMIT 6", (chat_id,))
+          if history_raw: history = list(reversed(history_raw)) # Gemini prefere ordem cronológica
+
+     bot_response_text = get_gemini_response(user_message, chat_history=history)
+
+     # Precisaria criar o chat aqui se não existir
+     if not chat_id:
+          new_chat_id = execute_db("INSERT INTO chats (user_id, status) VALUES (%s, 'active') RETURNING id", (user.id,), returning_id=True)
+          if new_chat_id:
+              chat_id = new_chat_id
+              session['current_chat_id'] = chat_id
+          else:
+              return {'sender_type': 'system', 'text': 'Erro ao criar novo chat.'}
+
+
+     save_message(chat_id, 'user', user_message, user.id)
+     save_message(chat_id, 'bot', bot_response_text)
+     response = {'sender_type': 'bot', 'text': bot_response_text, 'chat_id': chat_id, 'chat_status': 'active'}
+     return response
+
+
 @app.route('/api/chat/user_message', methods=['POST'])
 @login_required
 def api_chat_user_message():
@@ -1045,12 +1199,19 @@ def api_chat_user_message():
     user = current_user
     chat_id = session.get('current_chat_id') # Usa ID da sessão se existir
 
-    # Verifica se o chat atual (se existir) está ativo
+    # Verifica se o chat atual (se existir) pertence ao usuário e está ativo (ou manual)
     if chat_id:
-        chat = query_db("SELECT status FROM chats WHERE id = %s", (chat_id,), one=True)
-        if chat and chat['status'] != 'active':
-            save_message(chat_id, 'user', user_message, user.id) # Salva a msg mesmo assim
-            bot_response = "Aguarde a resposta do vendedor."
+        chat = query_db("SELECT status, user_id FROM chats WHERE id = %s", (chat_id,), one=True)
+        # Verifica se o chat existe e pertence ao utilizador
+        if not chat or chat['user_id'] != user.id:
+            # Se não pertence, não permite enviar (a não ser que seja admin - tratado em outra API)
+             session.pop('current_chat_id', None) # Limpa ID inválido da sessão
+             chat_id = None # Força a criação de um novo chat
+             # return jsonify({'error': 'Chat não encontrado ou não autorizado'}), 404 # Alternativa
+        elif chat['status'] not in ['active', 'manual_override', 'assumed']: # Estados onde user pode falar
+            # Salva a mensagem mas avisa que está bloqueado
+            save_message(chat_id, 'user', user_message, user.id)
+            bot_response = "Aguarde..."
             if chat['status'] == 'completed':
                 bot_response = "Esta negociação foi encerrada."
             elif chat['status'] == 'pending_review':
@@ -1059,7 +1220,7 @@ def api_chat_user_message():
             return jsonify({
                 'sender_type': 'system',
                 'text': bot_response,
-                'chat_status': chat['status']
+                'chat_status': chat['status'] # Envia status atualizado
             })
 
     # Comando secreto (processa antes da IA)
@@ -1073,22 +1234,13 @@ def api_chat_user_message():
         if chat_id: # Salva no chat existente, se houver
             save_message(chat_id, 'user', '*** COMANDO SECRETO ***', user.id)
             save_message(chat_id, 'system', response_text) # Mensagem do sistema
-        else: # Se não há chat, apenas responde
-             pass # Não cria chat só para isso
+        # Se não há chat, apenas responde (não cria chat só para isso)
 
         return jsonify({'sender_type': 'system', 'text': response_text, 'chat_id': chat_id})
 
-    # Processa a mensagem pela máquina de estados (cria chat se necessário)
-    # A função process_chat_state_machine NÃO FOI FORNECIDA, assumindo que existe em outro lugar
-    # response = process_chat_state_machine(user_message, user)
-    # Placeholder: Chamar Gemini diretamente (sem state machine)
-    bot_response_text = get_gemini_response(user_message)
-    # Precisaria criar o chat aqui se não existir
-    # if not chat_id: chat_id = create_new_chat(user.id) ...
-    # save_message(chat_id, 'user', user_message, user.id)
-    # save_message(chat_id, 'bot', bot_response_text)
-    response = {'sender_type': 'bot', 'text': bot_response_text, 'chat_id': chat_id} # Placeholder
-
+    # Processa a mensagem pela máquina de estados (ou Gemini direto)
+    # Esta função agora também lida com a criação do chat se chat_id for None
+    response = process_chat_state_machine(user_message, user)
     return jsonify(response)
 
 
@@ -1124,39 +1276,67 @@ def api_chat_admin_message(chat_id):
     if not admin_message: return jsonify({'error': 'Mensagem vazia'}), 400
 
     admin_user = current_user
-    chat = query_db("SELECT id, status, assigned_to FROM chats WHERE id = %s", (chat_id,), one=True)
+    chat = query_db("SELECT id, status, assigned_to, user_id FROM chats WHERE id = %s", (chat_id,), one=True) # Adiciona user_id
     if not chat: return jsonify({'success': False, 'message': 'Chat não encontrado.'}), 404
+
+    # IMPEDE admin de usar esta rota no SEU PRÓPRIO chat (deve usar /api/chat/user_message)
+    if chat['user_id'] == admin_user.id and chat['status'] != 'assumed' and chat['status'] != 'manual_override':
+        return jsonify({'success': False, 'message': 'Use a interface normal para responder aos seus próprios chats.'}), 403
 
     # Permissões para responder
     can_respond = False
-    if admin_user.role >= 2: can_respond = True
-    elif admin_user.role == 1:
-        if chat['assigned_to'] == admin_user.id: can_respond = True
-        elif chat['status'] == 'pending_review': can_respond = True # Pode assumir respondendo
+    if admin_user.role >= 2: can_respond = True # Cargos 2+ podem responder a qualquer chat (que não seja deles próprios no estado inicial)
+    elif admin_user.role == 1: # Vendedor (Cargo 1)
+        if chat['assigned_to'] == admin_user.id: can_respond = True # Pode responder se estiver atribuído
+        elif chat['status'] == 'pending_review': can_respond = True # Pode responder para assumir
 
-    if not can_respond: return jsonify({'success': False, 'message': 'Não autorizado a responder.'}), 403
+    if not can_respond: return jsonify({'success': False, 'message': 'Não autorizado a responder a este chat.'}), 403
     if chat['status'] == 'completed': return jsonify({'success': False, 'message': 'Chat já encerrado.'}), 400
 
     new_status = chat['status']
-    # Assume se estava pendente
+    # Assume se estava pendente E NÃO estava já atribuído a outro admin
     if chat['status'] == 'pending_review':
-        execute_db("UPDATE chats SET status = 'assumed', assigned_to = %s WHERE id = %s", (admin_user.id, chat_id))
-        log_action(admin_user, 'ASSUME_CHAT', details=f"Assumiu (respondendo) chat ID: {chat_id}")
-        new_status = 'assumed'
-        # Envia msg do sistema informando quem assumiu
-        save_message(chat_id, 'system', f"{admin_user.name} assumiu o atendimento.")
+        # Tenta assumir atomicamente
+        rows_affected = execute_db(
+             "UPDATE chats SET status = 'assumed', assigned_to = %s WHERE id = %s AND status = 'pending_review'",
+             (admin_user.id, chat_id)
+             # Não podemos usar returning_id=True aqui facilmente com execute_db como está
+        )
+        if rows_affected: # Verifica se a atualização foi bem sucedida (só atualiza se ainda estiver pending)
+            log_action(admin_user, 'ASSUME_CHAT', details=f"Assumiu (respondendo) chat ID: {chat_id}")
+            new_status = 'assumed'
+            # Envia msg do sistema informando quem assumiu
+            save_message(chat_id, 'system', f"{admin_user.name} assumiu o atendimento.")
+        else:
+             # Alguém assumiu entretanto
+             # Recarrega o status atual do chat
+             chat_updated = query_db("SELECT status, assigned_to FROM chats WHERE id = %s", (chat_id,), one=True)
+             if chat_updated and chat_updated['assigned_to'] != admin_user.id:
+                  # Não salva a mensagem se outro assumiu
+                  return jsonify({'success': False, 'message': 'Outro admin acabou de assumir este chat.', 'chat_status': chat_updated['status']}), 409 # Conflict
+             # Se chegou aqui, algo estranho aconteceu, ou foi ele mesmo que assumiu noutra janela? Continua...
+             new_status = chat_updated['status'] if chat_updated else chat['status']
 
 
+    # Salva a mensagem apenas se autorizado e o chat não foi assumido por outro entretanto
     save_message(chat_id, 'admin', admin_message, admin_user.id) # Assumindo que save_message existe
     return jsonify({'success': True, 'sender_type': 'admin', 'text': admin_message, 'sender_name': admin_user.name, 'chat_status': new_status})
+
 
 @app.route('/api/chat/disable_ia/<int:chat_id>', methods=['POST'])
 @login_required
 @role_required(min_role=1)
 def api_disable_ia(chat_id):
-    chat = query_db("SELECT id, status, assigned_to FROM chats WHERE id = %s", (chat_id,), one=True)
+    chat = query_db("SELECT id, status, assigned_to, user_id FROM chats WHERE id = %s", (chat_id,), one=True)
     if not chat: return jsonify({'success': False, 'message': 'Chat não encontrado.'}), 404
-    if current_user.role == 1 and chat['assigned_to'] != current_user.id: return jsonify({'success': False, 'message': 'Não autorizado.'}), 403
+    
+    # Verifica permissão para desativar IA (só no chat dos outros ou assumido por si)
+    is_assigned = chat['assigned_to'] == current_user.id
+    is_relevant_admin = current_user.role >= 2 or is_assigned # Admins 2+ ou o Vendedor atribuído
+    
+    if not is_relevant_admin or chat['user_id'] == current_user.id: # Não pode desativar IA no seu próprio chat
+         return jsonify({'success': False, 'message': 'Não autorizado a desativar a IA neste chat.'}), 403
+
     if chat['status'] == 'completed': return jsonify({'success': False, 'message': 'Chat já encerrado.'}), 400
     if chat['status'] == 'manual_override': return jsonify({'success': False, 'message': 'IA já está desativada.'}), 400
 
@@ -1175,19 +1355,23 @@ def api_disable_ia(chat_id):
 # @permission_required('close_chat') # Vendedor só pode fechar o seu, verificado abaixo
 @role_required(min_role=1) # Apenas admins podem fechar
 def api_close_chat(chat_id):
-    chat = query_db("SELECT id, status, assigned_to FROM chats WHERE id = %s", (chat_id,), one=True)
+    chat = query_db("SELECT id, status, assigned_to, user_id FROM chats WHERE id = %s", (chat_id,), one=True)
     if not chat: return jsonify({'success': False, 'message': 'Chat não encontrado.'}), 404
     if chat['status'] == 'completed': return jsonify({'success': False, 'message': 'Chat já encerrado.'}), 400
 
-    # Permissão para fechar
+    # Permissão para fechar (NÃO pode fechar o seu próprio chat por aqui)
     can_close = False
-    if current_user.role >= 2: # Admins 2+ podem fechar qualquer um
-        can_close = True
-    elif current_user.role == 1 and chat['assigned_to'] == current_user.id: # Vendedor só fecha o seu
-        can_close = True
+    is_assigned = chat['assigned_to'] == current_user.id
+    is_own_chat = chat['user_id'] == current_user.id
+
+    if not is_own_chat: # Só pode fechar chat dos outros
+        if current_user.role >= 2: # Admins 2+ podem fechar qualquer chat (dos outros)
+            can_close = True
+        elif current_user.role == 1 and is_assigned: # Vendedor só fecha o seu atribuído (que não é o dele próprio)
+            can_close = True
 
     if not can_close:
-        return jsonify({'success': False, 'message': 'Não autorizado a encerrar este chat.'}), 403
+        return jsonify({'success': False, 'message': 'Não autorizado a encerrar este chat por aqui.'}), 403
 
     success = execute_db("UPDATE chats SET status = 'completed' WHERE id = %s", (chat_id,))
     if success:
@@ -1316,14 +1500,22 @@ def api_assume_negotiation(chat_id):
     if not chat: return jsonify({'success': False, 'message': 'Chat não encontrado.'}), 404
     if chat['status'] != 'pending_review': return jsonify({'success': False, 'message': 'Chat não está pendente.'}), 409
 
-    success = execute_db("UPDATE chats SET status = 'assumed', assigned_to = %s WHERE id = %s", (admin_user.id, chat_id))
-    if success:
+    # Tenta assumir atomicamente
+    rows_affected = execute_db(
+         "UPDATE chats SET status = 'assumed', assigned_to = %s WHERE id = %s AND status = 'pending_review'",
+         (admin_user.id, chat_id)
+    )
+
+    if rows_affected:
         log_action(admin_user, 'ASSUME_CHAT', details=f"Assumiu chat ID: {chat_id}")
         msg_text = f"{admin_user.name} assumiu o atendimento."
         save_message(chat_id, 'system', msg_text) # Assumindo que save_message existe
-        return jsonify({'success': True, 'message': 'Você assumiu a negociação.'})
+        return jsonify({'success': True, 'message': 'Você assumiu a negociação.', 'chat_status': 'assumed'}) # Retorna novo status
     else:
-        return jsonify({'success': False, 'message': 'Erro ao assumir chat.'}), 500
+        # Chat já foi assumido por outro ou não está mais pendente
+        chat_updated = query_db("SELECT status FROM chats WHERE id = %s", (chat_id,), one=True)
+        current_status = chat_updated['status'] if chat_updated else 'desconhecido'
+        return jsonify({'success': False, 'message': 'Este chat não está mais disponível para assumir.', 'chat_status': current_status}), 409 # Conflict
 
 # --- PONTO DE ENTRADA ---
 if __name__ == '__main__':
@@ -1340,10 +1532,34 @@ if __name__ == '__main__':
                     );
                  """)
                  cur_init.execute("INSERT INTO dev_flag (id, is_activated) VALUES (1, FALSE) ON CONFLICT (id) DO NOTHING;")
+                 # Cria tabela app_settings se não existir
+                 cur_init.execute("""
+                    CREATE TABLE IF NOT EXISTS app_settings (
+                        setting_key VARCHAR(100) PRIMARY KEY,
+                        setting_value TEXT,
+                        description TEXT,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                 """)
+                 # Insere configurações WebRTC iniciais se não existirem
+                 cur_init.execute("""
+                    INSERT INTO app_settings (setting_key, setting_value, description) VALUES
+                    ('webrtc_audio_call_user_enabled', 'false', 'Allow users to initiate audio calls'),
+                    ('webrtc_audio_call_admin_enabled', 'false', 'Allow admins to initiate audio calls'),
+                    ('webrtc_video_call_user_enabled', 'false', 'Allow users to initiate video calls'),
+                    ('webrtc_video_call_admin_enabled', 'false', 'Allow admins to initiate video calls'),
+                    ('webrtc_screen_share_user_enabled', 'false', 'Allow users to share screen'),
+                    ('webrtc_screen_share_admin_enabled', 'false', 'Allow admins to share screen'),
+                    ('webrtc_notifications_user_enabled', 'true', 'Enable call notifications/sound for users'),
+                    ('webrtc_notifications_admin_enabled', 'true', 'Enable call notifications/sound for admins'),
+                    ('webrtc_status_online_user_enabled', 'true', 'Show online status to users'),
+                    ('webrtc_status_online_admin_enabled', 'true', 'Show online status to admins')
+                    ON CONFLICT (setting_key) DO NOTHING;
+                 """)
                  conn_init.commit()
-                 print("✅ Tabela dev_flag verificada/inicializada.")
+                 print("✅ Tabelas dev_flag e app_settings verificadas/inicializadas.")
         except Exception as e_init:
-            print(f"WARN: Erro ao verificar/inicializar dev_flag: {e_init}")
+            print(f"WARN: Erro ao verificar/inicializar tabelas: {e_init}")
             conn_init.rollback()
         finally:
              conn_init.close()

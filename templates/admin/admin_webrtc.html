@@ -48,61 +48,78 @@
 {% endblock content %}
 
 {% block scripts %}
+{# Este script será extraído e executado pelo JS em layout_admin.html #}
 <script>
-    // Coloca a função no escopo global ou window para ser achada pelo AJAX
-    window.attachWebRTCToggleListeners = function() {
-        document.querySelectorAll('.webrtc-toggle').forEach(toggle => {
-            // Remove listener antigo para evitar duplicação ao recarregar via AJAX
-             const oldListener = toggle.handler; // Assume que armazenamos a referência
-             if (oldListener) {
-                 toggle.removeEventListener('change', oldListener);
-             }
+    // Usa um IIFE para evitar conflitos de variáveis globais
+    (function() {
+        // Define a função para anexar listeners no escopo local
+        function attachWebRTCToggleListeners() {
+            const mainContent = document.getElementById('main-content-ajax');
+            if (!mainContent) return; // Sai se o container principal não for encontrado
 
-            // Define a função handler
-            const handler = async (event) => {
-                const checkbox = event.target;
-                const featureId = checkbox.closest('tr').dataset.featureId;
-                const accessType = checkbox.dataset.access;
-                const isEnabled = checkbox.checked;
-
-                // Desabilita temporariamente para evitar cliques múltiplos
-                checkbox.disabled = true;
-
-                try {
-                    const response = await fetch('/api/admin/webrtc/toggle', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            feature_id: featureId,
-                            access_type: accessType,
-                            enabled: isEnabled
-                        })
-                    });
-                    const result = await response.json();
-
-                    if (!result.success) {
-                        alert('Erro ao atualizar: ' + result.message);
-                        // Reverte a alteração visual em caso de erro
-                        checkbox.checked = !isEnabled;
-                    } else {
-                        // Feedback visual (opcional) - piscar a linha, etc.
-                        console.log(result.message); // Apenas log por enquanto
-                    }
-                } catch (err) {
-                    alert('Erro de conexão ao atualizar a configuração.');
-                    checkbox.checked = !isEnabled; // Reverte
-                } finally {
-                    checkbox.disabled = false; // Reabilita
+            mainContent.querySelectorAll('.webrtc-toggle').forEach(toggle => {
+                // Verifica se já existe um listener (para evitar duplicação)
+                if (toggle.dataset.listenerAttached === 'true') {
+                    // console.log('Listener já anexado para:', toggle.closest('tr').dataset.featureId, toggle.dataset.access);
+                    return;
                 }
-            };
+                toggle.dataset.listenerAttached = 'true'; // Marca como tendo listener
+                // console.log('Anexando listener para:', toggle.closest('tr').dataset.featureId, toggle.dataset.access);
 
-            // Adiciona o novo listener e guarda a referência
-            toggle.addEventListener('change', handler);
-            toggle.handler = handler; // Armazena a referência no próprio elemento
-        });
-    };
 
-    // Executa a função imediatamente ao carregar o script (seja em full load ou AJAX)
-    window.attachWebRTCToggleListeners();
+                toggle.addEventListener('change', async (event) => {
+                    const checkbox = event.target;
+                    const featureId = checkbox.closest('tr').dataset.featureId;
+                    const accessType = checkbox.dataset.access;
+                    const isEnabled = checkbox.checked;
+
+                    // Desabilita temporariamente para evitar cliques múltiplos
+                    checkbox.disabled = true;
+                    const label = checkbox.closest('label');
+                    if(label) label.style.opacity = '0.5'; // Feedback visual
+
+                    try {
+                        const response = await fetch('/api/admin/webrtc/toggle', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                feature_id: featureId,
+                                access_type: accessType,
+                                enabled: isEnabled
+                            })
+                        });
+                        const result = await response.json();
+
+                        if (!response.ok || !result.success) {
+                             const errorMsg = result.message || `Erro ${response.status} ao atualizar.`;
+                            alert('Erro: ' + errorMsg);
+                            // Reverte a alteração visual em caso de erro
+                            checkbox.checked = !isEnabled;
+                        } else {
+                            // Feedback visual de sucesso (opcional)
+                            console.log(result.message); // Apenas log por enquanto
+                            const row = checkbox.closest('tr');
+                            if (row) {
+                                 row.style.backgroundColor = 'rgba(16, 185, 129, 0.1)'; // Verde suave
+                                 setTimeout(() => { row.style.backgroundColor = ''; }, 1000); // Remove após 1s
+                            }
+                        }
+                    } catch (err) {
+                         console.error("Erro no toggle WebRTC:", err);
+                        alert('Erro de conexão ao atualizar a configuração.');
+                        checkbox.checked = !isEnabled; // Reverte
+                    } finally {
+                        checkbox.disabled = false; // Reabilita
+                         if(label) label.style.opacity = '1';
+                    }
+                });
+            });
+         } // Fim de attachWebRTCToggleListeners
+
+         // Chama a função imediatamente para anexar listeners ao conteúdo carregado
+         attachWebRTCToggleListeners();
+         console.log("Scripts for admin_webrtc loaded and listeners attached.");
+
+    })(); // Executa a função imediatamente
 </script>
 {% endblock scripts %}

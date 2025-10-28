@@ -16,7 +16,7 @@
             <div class="value" style="color: var(--color-warning);">{{ stats.available | default('0', true) }}</div>
             <div class="label">Atendimentos Disponíveis (Pendente)</div>
         </div>
-        
+
         <div class="stat-card">
             <div class="value" style="color: var(--color-primary);">{{ stats.my_pending | default('0', true) }}</div>
             <div class="label">Meus Atendimentos (Em Andamento)</div>
@@ -30,7 +30,7 @@
     <div class="admin-section">
         <h2>Atendimentos Disponíveis para Assumir</h2>
         <p>A fila de atendimentos pendentes pode ser vista na página "Meus Atendimentos".</p>
-        {# Link interno agora usa a classe ajax-link #}
+        {# Link interno deve ter a classe ajax-link para funcionar sem recarregar #}
         <a href="{{ url_for('admin_my_negotiations') }}" class="btn btn-primary ajax-link">
             Ver Fila de Atendimento
         </a>
@@ -39,5 +39,5 @@
 {% endblock content %}
 
 {% block scripts %}
-{# Scripts específicos para esta página iriam aqui. Nenhum neste caso. #}
+{# Scripts específicos para esta página iriam aqui. #}
 {% endblock scripts %}
