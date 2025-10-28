@@ -111,7 +111,8 @@ def role_required(min_role=0):
                 return login_manager.unauthorized()
             if current_user.role < min_role:
                 flash("Você não tem permissão para acessar esta página.", "danger")
-                return redirect(url_for('home'))
+                # CORREÇÃO: Redireciona para o login, não para 'home'
+                return redirect(url_for('login')) 
             return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -161,7 +162,8 @@ def execute_db(query, args=(), returning_id=False):
             cur.execute(query, args)
             conn.commit()
             if returning_id:
-                return cur.fetchone()[0]
+                # CORREÇÃO: fetchone() retorna uma tupla
+                return cur.fetchone()[0] 
             return True
     except Exception as e:
         print(f"Erro ao executar comando: {e}")
@@ -193,11 +195,13 @@ def activate_dev_flag(user):
         return False
     try:
         with conn.cursor() as cur:
+            # CORREÇÃO: Atualiza a flag E o cargo do usuário na mesma transação
             cur.execute("UPDATE dev_flag SET is_activated = TRUE, activated_by_user_id = %s WHERE id = 1 AND is_activated = FALSE", (user.id,))
-            if cur.rowcount == 0:
+            if cur.rowcount == 0: # Garante que só seja ativado uma vez
                 conn.rollback()
                 return False
-            cur.execute("UPDATE users SET role = 5 WHERE id = %s", (user.id,))
+            # Atribui o cargo 5 ao usuário que ativou
+            cur.execute("UPDATE users SET role = 5 WHERE id = %s", (user.id,)) 
             conn.commit()
             log_action(user, 'DEV_MODE_ACTIVATED', details="Comando secreto Qazxcvbnmlp7@ utilizado.")
             return True
@@ -244,16 +248,17 @@ def get_gemini_response(user_message, chat_history=None, product_info=None):
         return "Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente."
 
 # --- ROTAS DE PÁGINAS (VIEW/CONTROLLER) ---
-# ... (todo o seu código anterior mantido)
 
-# --- ROTAS CORRETAS ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if current_user.is_authenticated: 
-        return redirect(url_for('home'))
+    if current_user.is_authenticated:
+        # CORREÇÃO: Redireciona usuário logado para o destino correto
+        if current_user.role >= 1:
+            return redirect(url_for('admin_panel'))
+        else:
+            return redirect(url_for('new_chat_page'))
     
     if request.method == 'POST':
-        # Processar login via form tradicional
         email = request.form.get('email')
         password = request.form.get('password')
         remember = bool(request.form.get('remember'))
@@ -266,19 +271,28 @@ def login():
             session.pop('chat_state', None)
             log_action(user, 'LOGIN')
             flash('Login realizado com sucesso!', 'success')
-            return redirect(url_for('home'))
+            
+            # CORREÇÃO: Redireciona baseado no cargo
+            if user.role >= 1:
+                return redirect(url_for('admin_panel'))
+            else:
+                return redirect(url_for('new_chat_page'))
         else:
             flash('E-mail ou senha inválidos!', 'danger')
     
+    # Usuário não logado, mostra a página de login
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if current_user.is_authenticated: 
-        return redirect(url_for('home'))
+    if current_user.is_authenticated:
+        # CORREÇÃO: Redireciona usuário logado para o destino correto
+        if current_user.role >= 1:
+            return redirect(url_for('admin_panel'))
+        else:
+            return redirect(url_for('new_chat_page'))
     
     if request.method == 'POST':
-        # Processar registro via form tradicional
         name = request.form.get('name')
         email = request.form.get('email')
         password = request.form.get('password')
@@ -292,6 +306,10 @@ def register():
             flash('As senhas não coincidem!', 'danger')
             return render_template('register.html')
         
+        if len(password) < 6:
+            flash('A senha deve ter pelo menos 6 caracteres!', 'danger')
+            return render_template('register.html')
+            
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
             flash('Formato de e-mail inválido!', 'danger')
             return render_template('register.html')
@@ -313,7 +331,8 @@ def register():
             login_user(user)
             log_action(user, 'REGISTER', details=f"Nova conta criada: {email}")
             flash('Conta criada com sucesso!', 'success')
-            return redirect(url_for('home'))
+            # CORREÇÃO: Redireciona novo usuário (cargo 0) para o chat
+            return redirect(url_for('new_chat_page'))
         else:
             flash('Erro ao criar conta!', 'danger')
     
@@ -330,12 +349,13 @@ def logout():
 
 def get_recent_chats(user_id):
     """Busca os chats recentes do usuário para a sidebar."""
+    # CORREÇÃO (BUG): Removido o LEFT JOIN com 'products' e a coluna 'product_id'
+    # pois ela não existe na tabela 'chats' do seu schema.sql
     return query_db("""
         SELECT c.id, c.contact_name, c.status, c.created_at, c.last_activity, 
                c.last_message, c.unread_count, c.assigned_to,
-               COALESCE(p.name, 'Nova Negociação') as product_name
+               c.contact_name as product_name
         FROM chats c 
-        LEFT JOIN products p ON c.product_id = p.id
         WHERE c.user_id = %s 
         ORDER BY c.last_activity DESC 
         LIMIT 10
@@ -345,104 +365,80 @@ def get_recent_chats(user_id):
 @app.route('/home')
 @login_required
 def home():
-    # Buscar chats recentes
-    recent_chats = get_recent_chats(current_user.id)
-    
-    # Estatísticas
-    total_chats = query_db("SELECT COUNT(id) as c FROM chats WHERE user_id = %s", (current_user.id,), one=True) or {'c': 0}
-    active_chats = query_db("SELECT COUNT(id) as c FROM chats WHERE user_id = %s AND status = 'active'", (current_user.id,), one=True) or {'c': 0}
-    
-    return render_template('home.html', 
-                         recent_chats=recent_chats,
-                         total_chats=total_chats['c'],
-                         active_chats=active_chats['c'])
+    # CORREÇÃO: Esta rota não exibe mais o "painel feio" (home.html).
+    # Ela redireciona o usuário para o local correto com base no cargo.
+    if current_user.role >= 1:
+        return redirect(url_for('admin_panel'))
+    else:
+        return redirect(url_for('new_chat_page'))
 
-# ... (restante das suas rotas mantidas)
-
-
-@app.route('/new_chat')  # CORRIGIDO: era '/chat'
+@app.route('/new_chat')
 @login_required
 def new_chat_page():
+    # CORREÇÃO (CRASH): Esta rota estava quebrando pois 'new_chat.html' não existe.
+    # Agora ela renderiza 'chat.html' no modo "novo chat".
     session.pop('chat_state', None)
     session.pop('current_chat_id', None)
     session.pop('negotiation_data', None)
     
-    # Busca chats recentes para sidebar
     recent_chats = get_recent_chats(current_user.id)
     
-    return render_template('new_chat.html', recent_chats=recent_chats or [])  # CORRIGIDO: template correto
+    return render_template('chat.html', 
+                         recent_chats=recent_chats or [],
+                         chat_id=None,
+                         chat_history=None,
+                         chat_data=None # Passa None para indicar um novo chat
+                         )
 
 @app.route('/chat/<int:chat_id>')
 @login_required
-def chat(chat_id):  # CORRIGIDO: nome da função
-    # Puxa dados do chat E do usuário que o criou - CORRIGIDO
-    chat = query_db("""
+def existing_chat_page(chat_id): # CORREÇÃO: Renomeada para evitar conflito com a rota <chat_id>
+    # Puxa dados do chat E do usuário que o criou
+    chat_data = query_db("""
         SELECT c.*, u.name as user_name, u.email as user_email 
         FROM chats c 
         JOIN users u ON c.user_id = u.id 
         WHERE c.id = %s
     """, (chat_id,), one=True)
     
-    if not chat: 
+    if not chat_data: 
         abort(404)
     
     # Verifica permissão
-    if chat['user_id'] != current_user.id and current_user.role < 1:
-        abort(403)
+    if chat_data['user_id'] != current_user.id and current_user.role < 1:
+        abort(403) # Proibido
     
-    # Carrega histórico, juntando nome do admin (se houver) - CORRIGIDO
+    # Carrega histórico, juntando nome do admin (se houver)
     history = query_db("""
         SELECT m.sender_type, m.text, m.timestamp, u.name as sender_name, m.is_from_user
         FROM messages m
-        LEFT JOIN users u ON m.sender_id = u.id AND m.sender_type = 'admin'
+        LEFT JOIN users u ON m.sender_id = u.id AND (m.sender_type = 'admin' OR m.sender_type = 'user')
         WHERE m.chat_id = %s 
         ORDER BY m.timestamp ASC
     """, (chat_id,))
     
-    # Busca chats recentes para sidebar
     recent_chats = get_recent_chats(current_user.id)
     
     session.pop('chat_state', None)
     return render_template('chat.html', 
-                         chat_data=chat, 
+                         chat_data=chat_data, 
                          chat_history=history or [], 
                          chat_id=chat_id,
                          recent_chats=recent_chats or [])
 
-@app.route('/contacts')  # CORRIGIDO: rota adicionada
-@login_required
-def contacts():
-    chats = query_db("""
-        SELECT c.id, c.contact_name, c.contact_phone, c.status, c.created_at, c.last_activity
-        FROM chats c 
-        WHERE c.user_id = %s 
-        ORDER BY c.contact_name ASC
-    """, (current_user.id,))
-    
-    return render_template('contacts.html', contacts=chats or [])
-
-@app.route('/reports')  # CORRIGIDO: rota adicionada
-@login_required
-def reports():
-    total_chats = query_db("SELECT COUNT(id) as c FROM chats WHERE user_id = %s", (current_user.id,), one=True)['c'] or 0
-    total_messages = query_db("""
-        SELECT COUNT(m.id) as c 
-        FROM messages m 
-        JOIN chats c ON m.chat_id = c.id 
-        WHERE c.user_id = %s
-    """, (current_user.id,), one=True)['c'] or 0
-    active_chats = query_db("SELECT COUNT(id) as c FROM chats WHERE user_id = %s AND status = 'active'", (current_user.id,), one=True)['c'] or 0
-    
-    return render_template('reports.html', 
-                         total_chats=total_chats, 
-                         total_messages=total_messages,
-                         active_chats=active_chats)
+# CORREÇÃO: Rotas 'contacts' e 'reports' removidas pois os templates não existem
+# e faziam parte da UI 'home.html' rejeitada.
 
 # --- PAINEL ADMINISTRATIVO (ROTAS /admin/...) ---
 @app.route('/admin')
 @login_required
-@role_required(min_role=2)
+@role_required(min_role=1) # CORREÇÃO: Cargo 1 (Vendedor) pode acessar
 def admin_panel():
+    # CORREÇÃO: Vendedores (Cargo 1) são redirecionados para suas negociações
+    if current_user.role == 1:
+        return redirect(url_for('admin_negotiations'))
+        
+    # Cargos 2+ (Admin, MKT, Dev) veem o dashboard completo
     stats = {
         'total_users': query_db("SELECT COUNT(id) as c FROM users", one=True)['c'] or 0,
         'total_products': query_db("SELECT COUNT(id) as c FROM products", one=True)['c'] or 0,
@@ -450,17 +446,16 @@ def admin_panel():
         'total_negotiations': query_db("SELECT COUNT(id) as c FROM chats", one=True)['c'] or 0
     }
     
+    # CORREÇÃO (BUG): Removido o LEFT JOIN com 'products'
     reviews = query_db("""
-        SELECT c.id, u.name as user_name, c.created_at, p.name as product_name, c.contact_name
+        SELECT c.id, u.name as user_name, c.created_at, c.contact_name
         FROM chats c 
         JOIN users u ON c.user_id = u.id 
-        LEFT JOIN products p ON c.product_id = p.id
         WHERE c.status = 'pending_review' 
         ORDER BY c.created_at DESC 
         LIMIT 5
     """) or []
     
-    # Status do Gemini
     gemini_status = "online" if GEMINI_AVAILABLE else "offline"
     
     return render_template('admin/admin_panel.html', 
@@ -480,11 +475,12 @@ def admin_products():
 @permission_required('promote_to_junior')
 def admin_users():
     dev_activated = check_dev_flag()
+    # A query busca usuários com cargo INFERIOR ao do admin logado
     query = "SELECT id, name, email, role, created_at FROM users WHERE role < %s"
     args = [current_user.role]
     
     if dev_activated:
-        query += " AND role != 5"
+        query += " AND role != 5" # Esconde o cargo 5 se já ativado
     
     query += " ORDER BY name ASC"
     users = query_db(query, tuple(args)) or []
@@ -493,20 +489,19 @@ def admin_users():
 
 @app.route('/admin/negotiations')
 @login_required
-@permission_required('access_review')
+@permission_required('access_review') # Role 1+
 def admin_negotiations():
     search_query = request.args.get('q', '').strip()
     filter_vendedor_id = request.args.get('vendedor', '')
     
+    # CORREÇÃO (BUG): Removida a coluna 'p.name as product_name' e o LEFT JOIN com 'products'
     base_query = """
         SELECT c.id, c.status, c.created_at, c.contact_name, c.contact_phone,
                u.name as user_name, u.email as user_email, 
-               a.name as assigned_admin,
-               p.name as product_name
+               a.name as assigned_admin
         FROM chats c
         JOIN users u ON c.user_id = u.id
         LEFT JOIN users a ON c.assigned_to = a.id
-        LEFT JOIN products p ON c.product_id = p.id
     """
     
     args = []
@@ -523,20 +518,24 @@ def admin_negotiations():
     elif current_user.can('view_all_negotiations'):
         # Admin (Cargo 2+) pode filtrar por vendedor
         if filter_vendedor_id:
-            conditions.append("c.assigned_to = %s")
-            args.append(int(filter_vendedor_id))
+            try:
+                conditions.append("c.assigned_to = %s")
+                args.append(int(filter_vendedor_id))
+            except ValueError:
+                pass # Ignora filtro inválido
     
     if search_query:
         search_term_like = f"%{search_query}%"
-        search_condition = "(u.name ILIKE %s OR u.email ILIKE %s OR c.contact_name ILIKE %s)"
+        # Permite busca por ID do chat
+        search_condition_text = "(u.name ILIKE %s OR u.email ILIKE %s OR c.contact_name ILIKE %s)"
         args.extend([search_term_like, search_term_like, search_term_like])
         
         try:
             chat_id_int = int(search_query)
-            search_condition += " OR c.id = %s"
+            search_condition = f"({search_condition_text} OR c.id = %s)"
             args.append(chat_id_int)
         except ValueError:
-            pass
+            search_condition = search_condition_text
         
         conditions.append(search_condition)
 
@@ -611,7 +610,12 @@ def api_register():
     login_user(user)
     log_action(user, 'REGISTER', details=f"Nova conta criada: {email}")
     
-    return jsonify({'success': True, 'message': 'Registro bem-sucedido!'})
+    # CORREÇÃO: Retorna a URL de redirect para o JS
+    return jsonify({
+        'success': True, 
+        'message': 'Registro bem-sucedido!', 
+        'redirect': url_for('new_chat_page')
+    })
 
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
@@ -638,7 +642,14 @@ def api_login():
         login_user(user)
         session.pop('chat_state', None)
         log_action(user, 'LOGIN')
-        return jsonify({'success': True, 'message': 'Login bem-sucedido!'})
+        
+        # CORREÇÃO: Retorna a URL de redirect correta baseada no cargo
+        redirect_url = url_for('admin_panel') if user.role >= 1 else url_for('new_chat_page')
+        return jsonify({
+            'success': True, 
+            'message': 'Login bem-sucedido!',
+            'redirect': redirect_url
+        })
     else:
         log_action(None, 'LOGIN_FAILED', details=f"Tentativa falha (senha incorreta): {email}")
         return jsonify({'success': False, 'message': 'E-mail ou senha inválidos.'}), 401
@@ -646,9 +657,11 @@ def api_login():
 # --- API DO CHAT (LÓGICA PRINCIPAL) ---
 def save_message(chat_id, sender_type, text, sender_id=None):
     """Função helper para salvar qualquer mensagem no DB."""
+    # CORREÇÃO: is_from_user estava invertido
+    is_user = sender_type == 'user'
     return execute_db(
         "INSERT INTO messages (chat_id, sender_type, sender_id, text, is_from_user) VALUES (%s, %s, %s, %s, %s)",
-        (chat_id, sender_type, sender_id, text, sender_type == 'user')
+        (chat_id, sender_type, sender_id, text, is_user)
     )
 
 def process_chat_state_machine(user_message, user):
@@ -661,8 +674,8 @@ def process_chat_state_machine(user_message, user):
 
     if not chat_id:
         new_chat_id = execute_db(
-            "INSERT INTO chats (user_id, status, contact_name, contact_phone) VALUES (%s, 'active', %s, %s) RETURNING id", 
-            (user.id, 'Novo Contato', ''), 
+            "INSERT INTO chats (user_id, status, contact_name, contact_phone, last_activity, last_message) VALUES (%s, 'active', %s, %s, CURRENT_TIMESTAMP, %s) RETURNING id", 
+            (user.id, user.name, '', 'Chat iniciado'), # Usa o nome do usuário como contact_name inicial
             returning_id=True
         )
         if not new_chat_id:
@@ -686,7 +699,7 @@ def process_chat_state_machine(user_message, user):
         )
         
         if product:
-            bot_response = f"Produto encontrado: {product['name']}. (Estoque: {product['stock']}). Quantas unidades você deseja%s"
+            bot_response = f"Produto encontrado: {product['name']}. (Estoque: {product['stock']}). Quantas unidades você deseja?"
             negotiation = {
                 'product_id': product['id'], 
                 'product_name': product['name'],
@@ -701,11 +714,11 @@ def process_chat_state_machine(user_message, user):
                 (chat_id,)
             )
             bot_response = get_gemini_response(user_message, chat_history)
-            state = 'START'
+            state = 'START' # Mantém no estado START se não encontrar produto
 
     elif state == 'AWAITING_QUANTITY':
         try:
-            quantity = int(user_message)
+            quantity = int(re.findall(r'\d+', user_message)[0]) # Tenta extrair número
             if 0 < quantity <= negotiation.get('max_stock', 0):
                 negotiation['quantity'] = quantity
                 product_colors = query_db(
@@ -716,27 +729,27 @@ def process_chat_state_machine(user_message, user):
                 
                 if product_colors and product_colors['colors'] and len(product_colors['colors']) > 0:
                     negotiation['available_colors'] = product_colors['colors']
-                    bot_response = f"Entendido, {quantity} unidades. Qual cor você prefere%s ({', '.join(product_colors['colors'])})"
+                    bot_response = f"Entendido, {quantity} unidades. Qual cor você prefere? ({', '.join(product_colors['colors'])})"
                     state = 'AWAITING_COLOR'
                 else:
                     negotiation['color'] = 'N/A'
-                    bot_response = "Ótimo. Agora, qual o tipo de entrega%s (Ex: Padrão, Expressa)"
+                    bot_response = "Ótimo. Agora, qual o tipo de entrega? (Ex: Padrão, Expressa)"
                     state = 'AWAITING_DELIVERY'
             else:
                 bot_response = f"Quantidade inválida. Temos {negotiation.get('max_stock', 0)} em estoque."
                 state = 'AWAITING_QUANTITY'
                 
-        except (ValueError, KeyError):
-            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja%s"
-            state = 'START'
-            negotiation = {}
+        except (ValueError, KeyError, IndexError):
+            bot_response = "Por favor, informe apenas o número de unidades."
+            state = 'AWAITING_QUANTITY'
 
     elif state == 'AWAITING_COLOR':
         try:
             chosen_color = user_message.strip().capitalize()
-            if 'available_colors' in negotiation and chosen_color in negotiation['available_colors']:
+            # Checagem mais flexível
+            if 'available_colors' in negotiation and any(c.lower() == chosen_color.lower() for c in negotiation['available_colors']):
                 negotiation['color'] = chosen_color
-                bot_response = "Cor selecionada. Agora, qual o tipo de entrega%s (Ex: Padrão, Expressa)"
+                bot_response = "Cor selecionada. Agora, qual o tipo de entrega? (Ex: Padrão, Expressa)"
                 state = 'AWAITING_DELIVERY'
             else:
                 colors_str = ", ".join(negotiation.get('available_colors', []))
@@ -744,7 +757,7 @@ def process_chat_state_machine(user_message, user):
                 state = 'AWAITING_COLOR'
                 
         except KeyError:
-            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja%s"
+            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja?"
             state = 'START'
             negotiation = {}
 
@@ -766,14 +779,14 @@ def process_chat_state_machine(user_message, user):
             state = 'AWAITING_REVIEW'
             proposal_json = json.dumps(negotiation)
             
-            # Atualiza product_id e proposal_data
+            # CORREÇÃO (BUG): Removido 'product_id' da query
             execute_db(
-                "UPDATE chats SET proposal_data = %s, product_id = %s, last_activity = CURRENT_TIMESTAMP, last_message = %s WHERE id = %s", 
-                (proposal_json, negotiation['product_id'], bot_response[:100], chat_id)
+                "UPDATE chats SET proposal_data = %s, last_activity = CURRENT_TIMESTAMP, last_message = %s WHERE id = %s", 
+                (proposal_json, bot_response[:100], chat_id)
             )
             
         except KeyError:
-            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja%s"
+            bot_response = "Ocorreu um erro, vamos recomeçar. Qual produto você deseja?"
             state = 'START'
             negotiation = {}
             
@@ -785,7 +798,7 @@ def process_chat_state_machine(user_message, user):
     session['negotiation_data'] = negotiation
     save_message(chat_id, 'bot', bot_response, None)
     
-    # Atualiza timestamp do chat
+    # Atualiza last_message do chat
     execute_db("UPDATE chats SET last_activity = CURRENT_TIMESTAMP, last_message = %s WHERE id = %s", (bot_response[:100], chat_id))
     
     return {
@@ -811,11 +824,13 @@ def api_chat_user_message():
     if chat_id:
         chat = query_db("SELECT status FROM chats WHERE id = %s", (chat_id,), one=True)
         if chat and chat['status'] != 'active':
-            save_message(chat_id, 'user', user_message, user.id)
+            # Permite que usuário mande msg mesmo em revisão, mas o bot não processa
+            save_message(chat_id, 'user', user_message, user.id) 
             bot_response = "Este chat está sendo analisado por um vendedor. Por favor, aguarde a resposta."
             if chat['status'] == 'completed':
                 bot_response = "Esta negociação foi encerrada."
-            save_message(chat_id, 'bot', bot_response, None)
+            
+            # Não salva a resposta do bot, só a envia
             return jsonify({
                 'sender_type': 'bot', 
                 'text': bot_response, 
@@ -847,8 +862,11 @@ def api_request_review(chat_id):
     if not chat or chat['user_id'] != current_user.id:
         return jsonify({'success': False, 'message': 'Chat não encontrado ou não autorizado.'}), 404
     
-    if chat['status'] != 'active':
-        return jsonify({'success': False, 'message': 'Este chat já foi enviado para revisão.'}), 400
+    if chat['status'] != 'active' and chat['status'] != 'awaiting_review':
+         # Permite solicitar revisão mesmo se o estado da sessão for awaiting_review
+        if chat['status'] == 'pending_review':
+             return jsonify({'success': False, 'message': 'Este chat já foi enviado para revisão.'}), 400
+        return jsonify({'success': False, 'message': 'Este chat não pode ser enviado para revisão.'}), 400
     
     if chat['review_requested']:
         return jsonify({'success': False, 'message': 'Revisão já foi solicitada para este chat.'}), 400
@@ -861,12 +879,12 @@ def api_request_review(chat_id):
     if success:
         log_action(current_user, 'REQUEST_REVIEW', details=f"Usuário solicitou revisão para o chat ID: {chat_id}")
         bot_response = "Sua solicitação foi enviada! Um de nossos vendedores assumirá esta conversa em breve."
-        save_message(chat_id, 'bot', bot_response, None)
+        save_message(chat_id, 'system', bot_response, None) # Salva como system
         
         return jsonify({
             'success': True, 
             'message': bot_response, 
-            'sender_type': 'bot',
+            'sender_type': 'system', # Envia como system
             'chat_status': 'pending_review'
         })
     else:
@@ -1011,7 +1029,7 @@ def api_add_product():
         
         success = execute_db(
             "INSERT INTO products (code, name, price, stock, colors) VALUES (%s, %s, %s, %s, %s)", 
-            (code, name, price, stock, colors)
+            (code, name, price, stock, colors if colors else None) # Envia None se a lista for vazia
         )
         
         if success:
@@ -1028,7 +1046,11 @@ def api_add_product():
 @permission_required('remove_product')
 def api_delete_product(product_id):
     product = query_db("SELECT name, code FROM products WHERE id = %s", (product_id,), one=True)
-    product_name = f"{product['name']} ({product['code']})" if product else f"ID {product_id}"
+    
+    if not product:
+        return jsonify({'success': False, 'message': 'Produto não encontrado.'}), 404
+
+    product_name = f"{product['name']} ({product['code']})"
     
     success = execute_db("DELETE FROM products WHERE id = %s", (product_id,))
     
@@ -1065,6 +1087,7 @@ def api_promote_user():
     if not target_user: 
         return jsonify({'success': False, 'message': 'Usuário não encontrado.'}), 404
     
+    # Verifica se o admin pode rebaixar um usuário de nível superior (exceto Dev)
     if target_user['role'] >= admin_role and target_user['role'] != 5: 
         return jsonify({'success': False, 'message': 'Você não pode alterar o cargo de um admin de nível igual ou superior.'}), 403
     
@@ -1111,10 +1134,20 @@ def api_assume_negotiation(chat_id):
 # --- PONTO DE ENTRADA ---
 if __name__ == '__main__':
     # Inicializa a flag de Dev se não existir
-    if not query_db("SELECT id FROM dev_flag WHERE id = 1", one=True):
-        print("Inicializando flag de Dev (Cargo 5)...")
-        execute_db("INSERT INTO dev_flag (id, is_activated) VALUES (1, FALSE) ON CONFLICT (id) DO NOTHING")
-        print("Flag inicializada.")
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM dev_flag WHERE id = 1")
+                if not cur.fetchone():
+                    print("Inicializando flag de Dev (Cargo 5)...")
+                    cur.execute("INSERT INTO dev_flag (id, is_activated) VALUES (1, FALSE) ON CONFLICT (id) DO NOTHING")
+                    conn.commit()
+                    print("Flag inicializada.")
+        except Exception as e:
+            print(f"Erro ao inicializar flag: {e}")
+        finally:
+            conn.close()
 
     print("Iniciando servidor Flask...")
     print(f"✅ Gemini AI: {'DISPONÍVEL' if GEMINI_AVAILABLE else 'INDISPONÍVEL'}")

@@ -30,27 +30,21 @@ CREATE TABLE products (
 CREATE TABLE chats (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id) ON DELETE SET NULL, -- Se o user for apagado, o chat fica (mas sem dono)
-    contact_name VARCHAR(100) NOT NULL, -- NOME DO CONTATO (FALTANDO!)
-    contact_phone VARCHAR(20), -- TELEFONE DO CONTATO (FALTANDO!)
-    status VARCHAR(50) DEFAULT 'active', -- active, pending_review, assumed, completed, manual_override
+    status VARCHAR(50) DEFAULT 'active', -- active, pending_review, assumed, completed, manual_override (NOVO)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- PARA ORDENAR CHATS RECENTES (FALTANDO!)
-    last_message TEXT, -- ÚLTIMA MENSAGEM (FALTANDO!)
-    unread_count INT DEFAULT 0, -- CONTADOR DE MENSAGENS NÃO LIDAS (FALTANDO!)
     assigned_to INT REFERENCES users(id) DEFAULT NULL, -- ID do Vendedor/Admin que assumiu
     proposal_data JSONB DEFAULT NULL, -- Guarda os dados finais (valor, qtd, etc.)
-    review_requested BOOLEAN DEFAULT FALSE -- Garante que a revisão só pode ser pedida uma vez
+    review_requested BOOLEAN DEFAULT FALSE -- (NOVO) Garante que a revisão só pode ser pedida uma vez
 );
 
 -- 4. Tabela de Mensagens
 CREATE TABLE messages (
     id SERIAL PRIMARY KEY,
     chat_id INT REFERENCES chats(id) ON DELETE CASCADE, -- Se o chat for apagado, as msgs vão junto
-    sender_type VARCHAR(50) NOT NULL, -- 'bot', 'user', ou 'admin'
-    sender_id INT REFERENCES users(id) DEFAULT NULL, -- ID do user/admin (NULL se for 'bot')
+    sender_type VARCHAR(50) NOT NULL, -- 'bot', 'user', ou 'admin' ou 'system'
+    sender_id INT REFERENCES users(id) DEFAULT NULL, -- ID do user/admin (NULL se for 'bot' ou 'system')
     text TEXT NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_from_user BOOLEAN DEFAULT TRUE -- PARA COMPATIBILIDADE (FALTANDO!)
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 5. Flag para o comando secreto do Dev (Cargo 5)
@@ -80,7 +74,7 @@ INSERT INTO products (code, name, price, stock, colors) VALUES
 ON CONFLICT (code) DO NOTHING; -- Não insere se os códigos já existirem
 
 -- Inserindo um usuário Vendedor para teste ( !! Gere seu próprio hash !! )
--- Exemplo para senha '123' (use python -m flask_bcrypt hash -p 123)
+-- Exemplo para senha '123' (use: python -c "from flask_bcrypt import Bcrypt; print(Bcrypt().generate_password_hash('123').decode('utf-8'))")
 INSERT INTO users (name, email, password_hash, role) VALUES
-('Gabriel Oliveira Silva', 'Gabrielsilva3834@gmail.com', 'Qazxcvbnmlp7@', 5)
+('Vendedor Teste', 'vendedor@zipbum.com', '$2b$12$EXAMPLEHASH.GENERATE.YOUR.OWN', 1)
 ON CONFLICT (email) DO NOTHING;

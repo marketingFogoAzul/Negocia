@@ -39,11 +39,13 @@ const AuthModule = (function () {
      * @param {boolean} isSuccess - É uma mensagem de sucesso?
      */
     function showFormMessage(formId, message, isSuccess = false) {
-        const errorElement = document.querySelector(`${formId} .error-message`);
-        if (errorElement) {
-            errorElement.textContent = message;
-            errorElement.style.color = isSuccess ? 'var(--color-success)' : 'var(--color-danger)';
-            errorElement.style.display = 'block';
+        // CORREÇÃO: Usa o template de login/register que não tem .error-message
+        // Vamos usar o flash message container se existir, ou alert.
+        // O template de login/register que você usa (baseado em bootstrap)
+        // não tem o .error-message que o style.css espera.
+        // Vou usar o 'alert' por simplicidade, já que o template não tem o elemento
+        if (message) {
+             alert(message);
         }
     }
 
@@ -57,10 +59,12 @@ const AuthModule = (function () {
         if (button) {
             if (isLoading) {
                 button.disabled = true;
-                button.textContent = 'Aguarde...';
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Aguarde...';
             } else {
+                const icon = (formId.includes('login')) ? 'fa-sign-in-alt' : 'fa-user-plus';
+                const text = (formId.includes('login')) ? 'Entrar' : 'Criar Conta';
                 button.disabled = false;
-                button.textContent = (formId.includes('login')) ? 'Entrar' : 'Registrar';
+                button.innerHTML = `<i class="fas ${icon} me-2"></i>${text}`;
             }
         }
     }
@@ -75,7 +79,6 @@ const AuthModule = (function () {
         form.addEventListener('submit', async function (e) {
             e.preventDefault();
             setFormLoading('#login-form', true);
-            showFormMessage('#login-form', ''); // Limpa erros antigos
 
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
@@ -83,9 +86,8 @@ const AuthModule = (function () {
             const result = await postData('/api/auth/login', { email, password });
 
             if (result.success) {
-                showFormMessage('#login-form', result.message, true);
-                // Sucesso! O backend cuidou da sessão, apenas redirecionamos.
-                window.location.href = '/home';
+                // CORREÇÃO: Redireciona para a URL enviada pelo backend
+                window.location.href = result.redirect; 
             } else {
                 showFormMessage('#login-form', result.message || 'Erro desconhecido.');
                 setFormLoading('#login-form', false);
@@ -103,7 +105,6 @@ const AuthModule = (function () {
         form.addEventListener('submit', async function (e) {
             e.preventDefault();
             setFormLoading('#register-form', true);
-            showFormMessage('#register-form', ''); // Limpa erros
 
             const name = document.getElementById('name').value;
             const email = document.getElementById('email').value;
@@ -125,11 +126,8 @@ const AuthModule = (function () {
             const result = await postData('/api/auth/register', { name, email, password });
 
             if (result.success) {
-                showFormMessage('#register-form', result.message, true);
-                // Sucesso! Redireciona para a home após o registro.
-                setTimeout(() => {
-                    window.location.href = '/home';
-                }, 1000); // Espera 1s para o usuário ler a msg
+                 // CORREÇÃO: Redireciona para a URL enviada pelo backend
+                window.location.href = result.redirect;
             } else {
                 showFormMessage('#register-form', result.message || 'Erro desconhecido.');
                 setFormLoading('#register-form', false);
@@ -144,3 +142,13 @@ const AuthModule = (function () {
     };
 
 })();
+
+// Inicializa os formulários se eles existirem na página
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('login-form')) {
+        AuthModule.initLoginForm();
+    }
+    if (document.getElementById('register-form')) {
+        AuthModule.initRegisterForm();
+    }
+});

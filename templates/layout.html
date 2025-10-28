@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ZIPBUM Negocia{% endblock %}</title>
     
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
@@ -25,6 +23,7 @@
             background-color: var(--main-bg);
             color: var(--text-primary);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0; /* Garante que o body ocupe tudo */
         }
         
         /* Sidebar estilo ChatGPT */
@@ -115,6 +114,7 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            width: calc(100% - 260px); /* Garante que não transborde */
         }
         
         /* Header */
@@ -133,6 +133,7 @@
             display: flex;
             flex-direction: column;
             max-width: 100%;
+            height: 100vh; /* Ocupa 100% da altura */
         }
         
         .messages-container {
@@ -148,14 +149,28 @@
             padding: 1.5rem;
             display: flex;
             gap: 1rem;
+            max-width: 90%; /* Evita que a mensagem ocupe 100% */
         }
         
         .message.user {
             background-color: var(--chat-user-bg);
+            margin-left: auto; /* Alinha à direita */
+            flex-direction: row-reverse; /* Inverte avatar e conteúdo */
         }
         
         .message.bot {
             background-color: var(--chat-bot-bg);
+            margin-right: auto; /* Alinha à esquerda */
+        }
+
+        /* Mensagem do sistema (centralizada) */
+        .message.system {
+             background-color: transparent;
+             color: var(--text-secondary);
+             font-size: 0.85rem;
+             justify-content: center;
+             max-width: 100%;
+             padding: 0.5rem;
         }
         
         .message-avatar {
@@ -180,6 +195,7 @@
         .message-content {
             flex: 1;
             line-height: 1.5;
+            word-break: break-word; /* Quebra palavras longas */
         }
         
         /* Input area */
@@ -188,6 +204,7 @@
             max-width: 800px;
             margin: 0 auto;
             width: 100%;
+            /* background-color: var(--main-bg); /* Garante fundo */
         }
         
         .input-box {
@@ -235,6 +252,7 @@
             
             .main-content {
                 margin-left: 0;
+                width: 100%; /* Ocupa 100% em mobile */
             }
             
             .menu-toggle {
@@ -274,15 +292,279 @@
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
             color: white;
         }
+
+        /* Classes de Status (do style.css) para o painel admin */
+        .admin-header {
+            background-color: #1e293b;
+            border-bottom: 1px solid #475569;
+            padding: 24px 40px;
+        }
+        .admin-header h1 {
+            color: #f1f5f9;
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+        }
+        .admin-header p {
+            color: #cbd5e1;
+            font-size: 1.1rem;
+            margin: 0;
+        }
+        .admin-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+        }
+        .dashboard-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        .stat-card {
+            background-color: #1e293b;
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid #475569;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        .stat-card .value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #3b82f6;
+            line-height: 1;
+        }
+        .stat-card .label {
+            font-size: 1rem;
+            color: #cbd5e1;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+        .admin-section {
+            background-color: #1e293b;
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid #475569;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+        .admin-section h2 {
+            color: #f1f5f9;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0 0 20px 0;
+        }
+        .system-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .system-status.online {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            border: 1px solid #10b981;
+        }
+        .system-status.offline {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.online { background-color: #10b981; }
+        .status-dot.offline { background-color: #ef4444; }
+
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 600px;
+        }
+        .admin-table th,
+        .admin-table td {
+            padding: 16px;
+            border-bottom: 1px solid #475569;
+            text-align: left;
+            vertical-align: middle;
+        }
+        .admin-table th {
+            background-color: #334155;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .admin-table tr:last-child td { border-bottom: none; }
+        .admin-table tr:hover { background-color: #334155; }
+        .admin-table .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            gap: 8px;
+            color: white; /* Cor padrão do texto do botão */
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover:not(:disabled) { background-color: #2563eb; }
+        .btn-warning { background-color: #f59e0b; color: white; }
+        .btn-warning:hover:not(:disabled) { background-color: #d97706; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover:not(:disabled) { background-color: #dc2626; }
+        .btn-gray { background-color: #334155; color: #cbd5e1; }
+        .btn-gray:hover:not(:disabled) { background-color: #475569; color: #f1f5f9; }
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+        }
+        /* Formulários Admin */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .admin-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 800px;
+        }
+        .admin-form .form-group.full-width { grid-column: 1 / -1; }
+        .admin-form label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #cbd5e1;
+        }
+        .admin-form input,
+        .admin-form select,
+        .admin-form textarea {
+            padding: 12px 16px;
+            background-color: #334155;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            color: #f1f5f9;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+        .admin-form input:focus,
+        .admin-form select:focus,
+        .admin-form textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .admin-form .btn {
+            grid-column: 1 / -1;
+            justify-self: start;
+            width: auto;
+            padding: 12px 32px;
+        }
+        .error-message {
+            color: #ef4444;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        /* Status */
+        .status-cell {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        [class*="status-"] {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: capitalize;
+            white-space: nowrap;
+        }
+        .status-active, .status-bar-active { background-color: #f59e0b; color: white; }
+        .status-pending_review, .status-bar-pending_review { background-color: #3b82f6; color: white; }
+        .status-assumed, .status-bar-assumed { background-color: #8b5cf6; color: white; }
+        .status-manual_override, .status-bar-manual_override { background-color: #f59e0b; color: white; }
+        .status-completed, .status-bar-completed { background-color: #10b981; color: white; }
+
+        /* Paginação */
+        .pagination {
+            margin-top: 24px;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+        }
+        .pagination .btn {
+            text-decoration: none;
+            min-width: 100px;
+        }
+        
+        /* Search Form */
+        .search-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 16px;
+            margin-bottom: 24px;
+            align-items: end;
+        }
+        .search-form .form-group { margin-bottom: 0; }
+        .search-form .btn { padding: 12px 24px; height: fit-content; }
+        .search-form input, .search-form select {
+             padding: 12px 16px;
+            background-color: #334155;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            color: #f1f5f9;
+            font-size: 1rem;
+        }
+        .search-form label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #cbd5e1;
+        }
+
+        /* Flash messages */
+        .flash {
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-weight: 500;
+            border: 1px solid;
+        }
+        .flash.info {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #2563eb;
+        }
     </style>
 </head>
 <body>
-    <!-- Mobile Menu Toggle -->
     <button class="menu-toggle" id="menuToggle">
         <i class="fas fa-bars"></i>
     </button>
 
-    <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <a href="{{ url_for('home') }}" class="text-decoration-none">
@@ -292,32 +574,30 @@
             </a>
         </div>
         
-        <button class="new-chat-btn" onclick="location.href='{{ url_for('new_chat_page') }}'">
+        <button classD="new-chat-btn" onclick="location.href='{{ url_for('new_chat_page') }}'">
             <i class="fas fa-plus me-2"></i>Novo chat
         </button>
         
         <div class="chat-history">
             {% if recent_chats %}
                 {% for chat in recent_chats %}
-                    <div class="chat-item {% if chat.id == current_chat_id %}active{% endif %}" 
-                         onclick="location.href='{{ url_for('chat', chat_id=chat.id) }}'">
+                    <div class="chat-item {% if chat.id == chat_id %}active{% endif %}" 
+                         onclick="location.href='{{ url_for('existing_chat_page', chat_id=chat.id) }}'">
                         <i class="fas fa-message me-2"></i>
                         {{ chat.contact_name or 'Novo Chat' }}
                     </div>
                 {% endfor %}
             {% else %}
-                <div class="text-center text-muted py-4">
+                <div classa="text-center text-muted py-4">
                     <i class="fas fa-inbox fa-2x mb-2"></i>
                     <p class="small">Nenhum chat recente</p>
                 </div>
             {% endif %}
         </div>
         
-        <div class="mt-auto"> <!-- Adicionado para empurrar para o rodapé -->
-            <div class="user-section">
+        <div class="mt-auto"> <div class="user-section">
             {% if current_user.is_authenticated %}
-                <!-- Admin Panel Link - Aparece apenas para admins -->
-                {% if current_user.role >= 2 %}
+                {% if current_user.role >= 1 %}
                     <a href="{{ url_for('admin_panel') }}" class="admin-panel-link">
                         <i class="fas fa-cog me-1"></i>Painel Admin
                     </a>
@@ -330,7 +610,7 @@
                                  style="width: 32px; height: 32px;">
                                 <span class="text-white fw-bold">{{ current_user.name[0]|upper }}</span>
                             </div>
-                            <div class="text-start">
+                            <div classS="text-start">
                                 <div class="small fw-bold">{{ current_user.name }}</div>
                                 {% if current_user.role != 0 %}
                                 <div class="x-small text-muted">
@@ -348,12 +628,6 @@
                     <ul class="dropdown-menu dropdown-menu-dark">
                         <li><a class="dropdown-item" href="{{ url_for('home') }}">
                             <i class="fas fa-home me-2"></i>Home
-                        </a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('contacts') }}">
-                            <i class="fas fa-users me-2"></i>Contatos
-                        </a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('reports') }}">
-                            <i class="fas fa-chart-bar me-2"></i>Relatórios
                         </a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{{ url_for('logout') }}">
@@ -375,12 +649,10 @@
         </div>
     </div>
 
-    <!-- Main Content -->
     <div class="main-content" id="mainContent">
         {% block content %}{% endblock %}
     </div>
 
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
@@ -401,6 +673,12 @@
             textarea.style.height = 'auto';
             textarea.style.height = textarea.scrollHeight + 'px';
         }
+
+        // Aplica auto-resize a todos os textareas com a classe
+        document.querySelectorAll('.chat-input').forEach(textarea => {
+            textarea.addEventListener('input', () => autoResize(textarea));
+            autoResize(textarea); // Ajusta no carregamento
+        });
     </script>
     
     {% block scripts %}{% endblock %}
