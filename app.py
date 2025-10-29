@@ -585,12 +585,17 @@ def get_recent_chats(user_id):
     return query_db(query, args) or []
 
 @app.route('/')
-@app.route('/home')
-@login_required
+# @app.route('/home') # Pode remover esta linha
+@login_required # Mantém a proteção se alguém digitar /home diretamente
 def home():
     """Redireciona o usuário para o local correto."""
-    # Todos os usuários são redirecionados para a página principal do chat
-    return redirect(url_for('new_chat_page'))
+    # CORREÇÃO: Verifica se está autenticado ANTES de redirecionar
+    if current_user.is_authenticated:
+        # Se logado, vai para o chat
+        return redirect(url_for('new_chat_page'))
+    else:
+        # Se NÃO logado, vai para a página de login
+        return redirect(url_for('login'))
 
 @app.route('/chat') # Rota principal do chat
 @login_required
