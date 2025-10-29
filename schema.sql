@@ -81,12 +81,3 @@ INSERT INTO products (code, name, price, stock, colors) VALUES
 ('ZB-002', 'Mesa de Escritório', 950.50, 30, ARRAY['Branco', 'Preto', 'Madeira']),
 ('ZB-003', 'Monitor Ultrawide 34"', 3200.00, 15, ARRAY['Preto'])
 ON CONFLICT (code) DO NOTHING;
-
--- Senha '123' para os usuários de teste (gere seus próprios hashes em produção!)
--- $2b$12$EXAMPLEHASH.GENERATE.YOUR.OWN (exemplo, use o seu hash real)
--- Use este hash gerado para a senha '123': $2b$12$DWOv4T3K.QylfQ4QxVrQGeC8S1XpYm.x6uJhqPsE3A.k6Z/i4gYuy
-INSERT INTO users (name, email, password_hash, role) VALUES
-('Vendedor Teste', 'vendedor@zipbum.com', '$2b$12$DWOv4T3K.QylfQ4QxVrQGeC8S1XpYm.x6uJhqPsE3A.k6Z/i4gYuy', 1),
-('Admin Teste', 'admin@zipbum.com', '$2b$12$DWOv4T3K.QylfQ4QxVrQGeC8S1XpYm.x6uJhqPsE3A.k6Z/i4gYuy', 3),
-('Consumidor Teste', 'cliente@email.com', '$2b$12$DWOv4T3K.QylfQ4QxVrQGeC8S1XpYm.x6uJhqPsE3A.k6Z/i4gYuy', 0)
-ON CONFLICT (email) DO NOTHING;
