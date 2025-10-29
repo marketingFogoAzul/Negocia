@@ -24,18 +24,35 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # Configuração do Gemini
+# Configuração do Gemini (com inicialização explícita)
+gemini_model = None
+GEMINI_AVAILABLE = False
 try:
     if not GEMINI_API_KEY:
         raise ValueError("API Key do Gemini não encontrada no .env")
+    
+    # Inicializa de forma mais explícita (pode ajudar a evitar caches antigos)
     genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-pro')
+    
+    # Tenta obter o modelo
+    gemini_model = genai.GenerativeModel('gemini-1.0-pro')
+    
+    # Pequeno teste para ver se o modelo é acessível (opcional, mas bom)
+    # Tenta listar modelos para forçar uma conexão inicial
+    models_list = genai.list_models()
+    # Verifica se o modelo desejado está na lista e suporta o método
+    model_found = any(m.name == 'models/gemini-1.0-pro' and 'generateContent' in m.supported_generation_methods for m in models_list)
+
+    if not model_found:
+         raise ValueError("Modelo 'gemini-1.0-pro' não encontrado ou não suporta 'generateContent'. Verifique as permissões da API Key e o projeto Google Cloud.")
+         
     GEMINI_AVAILABLE = True
-    print("✅ Gemini AI configurado com sucesso!")
+    print(f"✅ Gemini AI configurado com sucesso! Usando modelo: {gemini_model.model_name}")
+
 except Exception as e:
     print(f"❌ Erro ao configurar Gemini: {e}")
     GEMINI_AVAILABLE = False
-    gemini_model = None
-
+    gemini_model = None # Garante que está None em caso de erro
 # Configuração do Banco de Dados
 if not DATABASE_URL:
     print("❌ ERRO CRÍTICO: DATABASE_URL não definida no arquivo .env!")
@@ -307,7 +324,7 @@ def activate_dev_flag(user):
             conn.close()
     return activated
 
-# --- FUNÇÃO GEMINI AI ---
+# --- FUNÇÃO GEMINI AI (CORRIGIDA) ---
 def get_gemini_response(user_message, chat_history=None, product_info=None):
     """Obtém resposta do Gemini AI baseada no contexto da conversa"""
     if not GEMINI_AVAILABLE or not gemini_model:
@@ -365,18 +382,35 @@ def get_gemini_response(user_message, chat_history=None, product_info=None):
         # Chama a API Gemini
         response = gemini_model.generate_content(full_prompt)
 
-        # Tratamento de segurança e resposta vazia
-        if not response.candidates or not response.candidates[0].content.parts:
-             print(f"WARN: Gemini retornou resposta vazia ou bloqueada. Prompt: {full_prompt}")
-             return "Não consigo processar essa solicitação no momento. Você pode tentar reformular?"
-        if response.candidates[0].finish_reason != 'STOP':
-            print(f"WARN: Gemini finalizou com razão '{response.candidates[0].finish_reason}'.")
-            # Pode retornar uma mensagem genérica ou a resposta parcial, se houver
-            # return response.text.strip() if response.text else "Houve um problema ao gerar a resposta completa."
+        # --- INÍCIO DA CORREÇÃO ---
+        # Novo tratamento de segurança e resposta vazia (mais robusto)
+        try:
+            # A forma correta de obter o texto é via 'parts'
+            response_text = response.candidates[0].content.parts[0].text.strip()
+        
+        except (IndexError, AttributeError, ValueError, Exception) as e:
+            # Esta exceção captura:
+            # 1. IndexError/AttributeError: Se 'candidates' ou 'parts' estiverem vazios (resposta bloqueada).
+            # 2. ValueError: Se a resposta não for texto.
+            # 3. Exception: Captura genérica para outras falhas de parsing.
+            
+            finish_reason = 'DESCONHECIDO'
+            try:
+                # Tenta obter a razão do bloqueio (ex: 'SAFETY', 'RECITATION', etc.)
+                if response.candidates:
+                    finish_reason = response.candidates[0].finish_reason
+            except Exception:
+                pass # Ignora se não conseguir ler a razão
+            
+            print(f"❌ WARN: Gemini retornou resposta vazia ou bloqueada. Razão: {finish_reason}.")
+            print(f"   Prompt (parcial): {full_prompt[:200]}...") # Loga o prompt que falhou
+            print(f"   Erro de parsing: {e}")
             return "Não consigo processar essa solicitação no momento. Você pode tentar reformular?"
+        
+        # Se chegamos aqui, response_text existe.
+        # A verificação 'finish_reason != 'STOP'' foi removida por ser muito restritiva.
+        # --- FIM DA CORREÇÃO ---
 
-
-        response_text = response.text.strip()
 
         # Filtra palavras bloqueadas na SAÍDA
         if blocked_words:
@@ -391,7 +425,7 @@ def get_gemini_response(user_message, chat_history=None, product_info=None):
         return response_text
 
     except Exception as e:
-        print(f"Erro CRÍTICO ao chamar Gemini AI: {e}")
+        print(f"❌ Erro CRÍTICO ao chamar Gemini AI: {e}")
         # Considerar logar o 'full_prompt' aqui para debug
         return "Desculpe, ocorreu um erro interno ao processar sua mensagem. Tente novamente mais tarde."
 

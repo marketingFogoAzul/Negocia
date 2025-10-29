@@ -774,3 +774,33 @@ body.admin-layout .main-content {
 .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .status-dot.online { background-color: var(--color-success); }
 .status-dot.offline { background-color: var(--color-danger); }
+
+/* --- CORREÇÃO: Aplica aos IDs do chat principal E interno --- */
+#chat-input, #internal-chat-input {
+    flex: 1;
+    padding: 10px 14px; /* Padding interno */
+    background-color: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text-primary);
+    font-size: 0.95rem; /* Tamanho fonte */
+    resize: none;
+    line-height: 1.4;
+    min-height: 42px; /* Altura mínima */
+    max-height: 150px; /* Altura máxima */
+    overflow-y: auto; /* Scroll se passar max-height */
+}
+#chat-input:focus, #internal-chat-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); /* Sombra mais sutil no foco */
+}
+#chat-input:disabled, #internal-chat-input:disabled { background-color: var(--color-bg-secondary); opacity: 0.7; }
+
+/* --- CORREÇÃO: Aplica aos IDs do chat principal E interno --- */
+#send-button, #internal-send-button {
+    min-width: 42px; /* Largura mínima */
+    height: 42px; /* Altura fixa igual à mínima do input */
+    padding: 0; /* Remove padding */
+    font-size: 1.1rem; /* Tamanho do ícone */
+}
